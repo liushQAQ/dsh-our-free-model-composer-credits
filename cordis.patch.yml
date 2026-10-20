@@ -1,0 +1,4 @@
+# dsh-composer-credits bundle patch
+- insert:
+    - id: dsh-composer-credits
+      name: dsh-composer-credits

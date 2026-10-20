@@ -1,0 +1,63 @@
+{
+  "name": "dsh-composer-credits",
+  "version": "1.0.0",
+  "description": "在 DSH 对话输入框常驻一枚积分胶囊：显示当前渠道账号余额，点开面板即可秒切优先账号。",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "composer",
+    "credits",
+    "channel-pack",
+    "our-free-model"
+  ],
+  "license": "MIT",
+  "author": "liushQAQ",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/liushQAQ/dsh-composer-credits.git"
+  },
+  "homepage": "https://github.com/liushQAQ/dsh-composer-credits#readme",
+  "bugs": {
+    "url": "https://github.com/liushQAQ/dsh-composer-credits/issues"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0"
+  },
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.1.0"
+  }
+}
