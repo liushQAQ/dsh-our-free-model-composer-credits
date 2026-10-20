@@ -20,14 +20,18 @@
 **安装顺序不能反**：先装 `dsh-our-free-model` 并至少登录一个渠道账号，再装本插件。
 
 ```bash
-# 第一步（强制前置）
-pnpm add dsh-our-free-model          # 或按其官方文档安装
+# 第一步（强制前置）：装 dsh-our-free-model，并至少登录一个渠道账号
+pnpm add dsh-our-free-model
+# 或按官方 Release 安装最新版：
+# https://github.com/Ebony-Vinyl/dsh-our-free-model/releases/latest
 
 # 第二步（本插件）
 pnpm add github:liushQAQ/dsh-our-free-model-composer-credits
 ```
 
-> 为什么不做成内置依赖：`dsh-our-free-model` 是带签名更新、自带数据目录的宿主级插件，装法（npm / 官方 tarball / managed 安装）随分发方式不同，硬写进 `dependencies` 会与用户已有的安装方式打架。因此本插件只声明它是**运行时前置**，不代为安装。
+> **版本建议**：本插件依赖的 `usage.badge` / `account.list` / `credits.balances` / `account.reorder` / `provider.status` 这几个 RPC 由 `dsh-our-free-model` 内嵌的 `channel-pack` 提供，**2.0.0 起才有**（含 npm 上的 2.1.0）。因此 1.x 的老版本装了也没用；建议直接用最新的 2.5.x。
+
+> 为什么不做成内置依赖：`dsh-our-free-model` 是带签名更新、自带数据目录的宿主级插件，装法（npm / 官方 tarball / managed 安装 / 应用内升级）随分发方式不同，硬写进 `dependencies` 会与用户已有的安装方式打架。因此本插件只声明它是**运行时前置**，不代为安装。
 
 ## 它解决什么
 
@@ -43,7 +47,7 @@ pnpm add github:liushQAQ/dsh-our-free-model-composer-credits
 
 ## 依赖
 
-需要宿主已安装 [`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model)，它内嵌的 `channel-pack` 提供全部 RPC。
+**强制前置**：宿主必须已安装 [`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model)（见上方「强制前置条件」一节），它内嵌的 `channel-pack` 提供全部 RPC。
 
 未安装时胶囊只显示 `—`，不报错、不影响输入框其它控件。
 
