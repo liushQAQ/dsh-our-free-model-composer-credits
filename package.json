@@ -1,6 +1,6 @@
 {
   "name": "dsh-our-free-model-composer-credits",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "dsh-our-free-model 的衍生插件：在 DSH 对话输入框常驻一枚积分胶囊，显示当前渠道账号余额，点开面板即可秒切优先账号。",
   "keywords": [
     "deepseek-harness",
