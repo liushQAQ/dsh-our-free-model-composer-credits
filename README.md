@@ -6,6 +6,29 @@
 
 > 命名规范：本插件属于 `dsh-our-free-model` 生态，一切对外标识统一以 `dsh-our-free-model-` 开头。
 
+## ⚠️ 强制前置条件：必须先装 `dsh-our-free-model`
+
+**这不是可选依赖，是硬性安装前提。** 本插件自己**不联网、不持凭证、不读任何账号数据**——它显示的所有积分、账号列表、切号动作，全部来自 [`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model) 内嵌的 `channel-pack` 提供的 RPC。
+
+所以：
+
+| 前置状态 | 结果 |
+| --- | --- |
+| ✅ 已装 `dsh-our-free-model` | 胶囊正常显示余额，面板可列账号、可切号 |
+| ❌ 未装 `dsh-our-free-model` | 胶囊只显示 `—`，点开是空面板。**插件不报错、不崩，但等于没用** |
+
+**安装顺序不能反**：先装 `dsh-our-free-model` 并至少登录一个渠道账号，再装本插件。
+
+```bash
+# 第一步（强制前置）
+pnpm add dsh-our-free-model          # 或按其官方文档安装
+
+# 第二步（本插件）
+pnpm add github:liushQAQ/dsh-our-free-model-composer-credits
+```
+
+> 为什么不做成内置依赖：`dsh-our-free-model` 是带签名更新、自带数据目录的宿主级插件，装法（npm / 官方 tarball / managed 安装）随分发方式不同，硬写进 `dependencies` 会与用户已有的安装方式打架。因此本插件只声明它是**运行时前置**，不代为安装。
+
 ## 它解决什么
 
 `dsh-our-free-model` 的积分只在「设置 → 插件 → Channel Pack」里能看到，输入框没有读数；而 `dsh-connect-workbuddy` / `dsh-connect-trae` 各自带一个胶囊，功能重复。本插件取代它们，在输入框工具行左侧放一枚极轻量的胶囊。
