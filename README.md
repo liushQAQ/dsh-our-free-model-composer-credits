@@ -24,11 +24,25 @@
 
 ## 安装
 
+> ⚠️ **本插件没有发布到 npm。** `npm i dsh-composer-credits` 会失败（E404）。装法只有走 GitHub 源。
+
+在你的 DSH Profile 目录（如 `~/.dsh/profiles/desktop`）下执行：
+
 ```bash
-dsh plugin install dsh-composer-credits
+# pnpm
+pnpm add github:liushQAQ/dsh-composer-credits
+
+# 或 npm
+npm i github:liushQAQ/dsh-composer-credits
 ```
 
-或手动：把本包放进 profile 的 `node_modules`，在 `dsh.profile.bundles` 里加入 `dsh-composer-credits`。
+也可以直接用 Release 里的 tarball：
+
+```bash
+pnpm add https://github.com/liushQAQ/dsh-composer-credits/releases/latest/download/dsh-composer-credits.tgz
+```
+
+装完后在 `dsh.profile.bundles` 里加入 `dsh-composer-credits` 并重启 / 重载 profile。
 
 ## 数据来源
 
