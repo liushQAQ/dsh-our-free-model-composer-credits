@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Composer credits",
-    "description": "Shows the active channel-pack account balance beside the composer and lets you switch the preferred account."
+    "description": "Add-on for dsh-our-free-model: shows the channel account balance beside the composer and switches the preferred account. Requires dsh-our-free-model installed first."
   }
 }

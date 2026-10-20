@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "输入框积分",
-    "description": "在输入框显示渠道包当前账号积分，并可切换优先账号。"
+    "description": "dsh-our-free-model 衍生插件：在输入框显示渠道账号积分并秒切优先账号。需先装 dsh-our-free-model。"
   }
 }
