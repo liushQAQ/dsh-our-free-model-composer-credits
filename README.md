@@ -1,8 +1,10 @@
-# dsh-composer-credits
+# dsh-our-free-model-composer-credits
 
-在 DSH（DeepSeek Harness）对话输入框常驻一枚**积分胶囊**：一眼看到当前渠道的账号余额，点开面板即可**秒切优先账号**。
+[`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model) 的**衍生插件**：在 DSH（DeepSeek Harness）对话输入框常驻一枚**积分胶囊**，一眼看到当前渠道的账号余额，点开面板即可**秒切优先账号**。
 
 ![积分胶囊](icon.svg)
+
+> 命名规范：本插件属于 `dsh-our-free-model` 生态，一切对外标识统一以 `dsh-our-free-model-` 开头。
 
 ## 它解决什么
 
@@ -24,25 +26,25 @@
 
 ## 安装
 
-> ⚠️ **本插件没有发布到 npm。** `npm i dsh-composer-credits` 会失败（E404）。装法只有走 GitHub 源。
+> ⚠️ **本插件没有发布到 npm。** `npm i dsh-our-free-model-composer-credits` 会失败（E404）。装法只有走 GitHub 源。
 
 在你的 DSH Profile 目录（如 `~/.dsh/profiles/desktop`）下执行：
 
 ```bash
 # pnpm
-pnpm add github:liushQAQ/dsh-composer-credits
+pnpm add github:liushQAQ/dsh-our-free-model-composer-credits
 
 # 或 npm
-npm i github:liushQAQ/dsh-composer-credits
+npm i github:liushQAQ/dsh-our-free-model-composer-credits
 ```
 
 也可以直接用 Release 里的 tarball：
 
 ```bash
-pnpm add https://github.com/liushQAQ/dsh-composer-credits/releases/latest/download/dsh-composer-credits.tgz
+pnpm add https://github.com/liushQAQ/dsh-our-free-model-composer-credits/releases/latest/download/dsh-our-free-model-composer-credits.tgz
 ```
 
-装完后在 `dsh.profile.bundles` 里加入 `dsh-composer-credits` 并重启 / 重载 profile。
+装完后在 `dsh.profile.bundles` 里加入 `dsh-our-free-model-composer-credits` 并重启 / 重载 profile。
 
 ## 数据来源
 

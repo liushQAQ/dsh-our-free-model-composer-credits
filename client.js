@@ -1,5 +1,5 @@
 /**
- * dsh-composer-credits — 输入框「积分胶囊」（浏览器端 / DSH client bundle 形态）
+ * dsh-our-free-model-composer-credits — 输入框「积分胶囊」（浏览器端 / DSH client bundle 形态）
  *
  * 作用：在对话输入框工具行左侧常驻一枚极轻量胶囊
  *   ① 读数 =「渠道短名 · 余额」，数据来自 channel-pack 的 `usage.badge` RPC
@@ -24,7 +24,7 @@
  *   `connection` 是机会式读取：拿不到就降级显示「—」，绝不让整个插槽崩掉。
  */
 window.__ModuleLoader__.load({
-  id: 'dsh-composer-credits',
+  id: 'dsh-our-free-model-composer-credits',
   factory(require) {
     const module = { exports: {} };
     const exports = module.exports;
@@ -41,7 +41,7 @@ window.__ModuleLoader__.load({
     } = React;
 
     /** 字典命名空间（独占，避免与宿主命名空间冲突）。 */
-    const NS = 'composerCredits';
+    const NS = 'ofmComposerCredits';
     /** 本插件只碰这一个 seat：输入框工具行左侧的紧凑控件位。 */
     const SLOT = 'conversation.input.left';
     /** 样式类前缀，避免与宿主 CSS module 撞名。 */
@@ -53,7 +53,7 @@ window.__ModuleLoader__.load({
     /** 面板打开期间的逐账号表刷新间隔（1 分钟）。 */
     const PANEL_INTERVAL_MS = 60000;
     /** 关注渠道的持久化键（插件私有前缀，不与 dsh-our-free-model 的键冲突）。 */
-    const STORE_KEY = 'dsh.composer-credits.channel';
+    const STORE_KEY = 'ofm.credits.channel';
 
     /**
      * channel-pack 的十四个渠道。`short` 是输入框读数用的紧凑名（读数行与宿主的
@@ -737,21 +737,21 @@ window.__ModuleLoader__.load({
     /* ────────────────────────── 插件本体 ────────────────────────── */
 
     return {
-      name: 'dsh-composer-credits',
+      name: 'dsh-our-free-model-composer-credits',
       inject: ['slots', 'locale'],
       apply(ctx) {
         try {
           ctx.effect(
             () => ctx.locale.register(NS, { zh: DICT.zh, en: DICT.en }),
-            'composer-credits: dictionaries',
+            'ofm-composer-credits: dictionaries',
           );
-          const cssId = 'dsh-composer-credits/style.css';
+          const cssId = 'dsh-our-free-model-composer-credits/style.css';
           ctx.effect(
             () => {
               if (typeof document === 'undefined') return () => {};
               if (document.querySelector(`style[data-plugin-css="${cssId}"]`) !== null) return () => {};
               const tag = document.createElement('style');
-              tag.dataset.plugin = 'dsh-composer-credits';
+              tag.dataset.plugin = 'dsh-our-free-model-composer-credits';
               tag.dataset.pluginCss = cssId;
               tag.textContent = CSS;
               document.head.appendChild(tag);
@@ -763,7 +763,7 @@ window.__ModuleLoader__.load({
                 }
               };
             },
-            'composer-credits: styles',
+            'ofm-composer-credits: styles',
           );
           const t = ctx.locale.bind(NS);
           // 注册是无条件的；组件自己读宿主 modelSelection 投影与 RPC 可用性，
@@ -772,7 +772,7 @@ window.__ModuleLoader__.load({
             ctx.slots.register(
               {
                 name: SLOT,
-                id: 'dsh-composer-credits',
+                id: 'dsh-our-free-model-composer-credits',
                 order: 4,
                 locale: NS,
                 inject: () => ({ t, hostCtx: ctx }),
@@ -781,7 +781,7 @@ window.__ModuleLoader__.load({
             ),
           );
         } catch (error) {
-          console.warn('[composer-credits] apply failed:', String(error?.message ?? error));
+          console.warn('[ofm-composer-credits] apply failed:', String(error?.message ?? error));
         }
       },
     };

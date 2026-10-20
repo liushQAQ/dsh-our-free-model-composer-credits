@@ -1,25 +1,26 @@
 {
-  "name": "dsh-composer-credits",
-  "version": "1.0.0",
-  "description": "在 DSH 对话输入框常驻一枚积分胶囊：显示当前渠道账号余额，点开面板即可秒切优先账号。",
+  "name": "dsh-our-free-model-composer-credits",
+  "version": "1.0.1",
+  "description": "dsh-our-free-model 的衍生插件：在 DSH 对话输入框常驻一枚积分胶囊，显示当前渠道账号余额，点开面板即可秒切优先账号。",
   "keywords": [
     "deepseek-harness",
     "dsh",
     "dsh-plugin",
+    "dsh-our-free-model",
+    "our-free-model",
     "composer",
     "credits",
-    "channel-pack",
-    "our-free-model"
+    "channel-pack"
   ],
   "license": "MIT",
   "author": "liushQAQ",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/liushQAQ/dsh-composer-credits.git"
+    "url": "git+https://github.com/liushQAQ/dsh-our-free-model-composer-credits.git"
   },
-  "homepage": "https://github.com/liushQAQ/dsh-composer-credits#readme",
+  "homepage": "https://github.com/liushQAQ/dsh-our-free-model-composer-credits#readme",
   "bugs": {
-    "url": "https://github.com/liushQAQ/dsh-composer-credits/issues"
+    "url": "https://github.com/liushQAQ/dsh-our-free-model-composer-credits/issues"
   },
   "type": "module",
   "exports": {
