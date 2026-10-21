@@ -54,6 +54,8 @@ pnpm add github:liushQAQ/dsh-our-free-model-composer-credits
 
 `dsh-our-free-model` 的积分只在「设置 → 插件 → Channel Pack」里能看到，输入框没有读数；而 `dsh-connect-workbuddy` / `dsh-connect-trae` 各自带一个胶囊，功能重复。本插件取代它们，在输入框工具行左侧放一枚极轻量的胶囊。
 
+第二个问题：不同平台经常有同名模型（多家都叫 `DeepSeek-V4.1-Flash`），模型选择器里只显示模型原名，分不出这条请求要发给哪个平台。本插件的宿主半体会给各渠道的模型名加上平台前缀，显示成 `LobsterAI · DeepSeek-V4.1-Flash · x0.05` 这种形式。
+
 ## 功能
 
 - **常驻读数**：形如 `● Raccoon 7,160`（渠道短名 · 余额）。每 5 分钟自动刷新一次。
@@ -61,6 +63,7 @@ pnpm add github:liushQAQ/dsh-our-free-model-composer-credits
   - 切号 = 把该账号排到 `account.reorder` 的**首位**，即改写 channel-pack 的自动选号 / 限流换号优先级。
 - **渠道可切换**：面板顶部列出所有还有账号的渠道，点击即切；选择记在 `localStorage`，跨会话保留。
 - **不伪造数字**：读不到余额的行显示 `—`，**绝不显示 0**。
+- **模型名带平台前缀**：宿主半体在模型目录的读取出口（`llm.listModels` / `llm.resolveModelInfo`）给上述 12 个渠道的模型名加上平台前缀，同名模型一眼可辨。只改 `name` 这一个显示字段，`id` / 路由 / 上下文元数据都不动；不属于渠道包的 provider 原样透传。
 
 ### 支持的渠道（12 个）
 
@@ -119,6 +122,14 @@ pnpm add https://github.com/liushQAQ/dsh-our-free-model-composer-credits/release
 - 挂载点：`conversation.input.left`（会话级 list 插槽，输入框工具行左侧的紧凑控件位）。
 
 ## 变更记录
+
+### v1.1.0 — 2026-10-22
+
+- **新增：模型名显示平台前缀**。宿主半体（`index.js`，此前为空实现）改为 `inject = ['llm']`，在 `llm.listModels` / `llm.resolveModelInfo` 两个读取出口把渠道包的模型名改写成 `<平台> · <原名>`，解决「不同平台同名模型分不出归属」的问题。
+  - 前缀表覆盖 12 个在用渠道（另保留 `buddy` / `workbuddy` 两条映射，供旧版本或回滚时正确显示）。
+  - 只改 `name` 字段，`id` / `provider` / 上下文与工具元数据零改动，不影响路由与请求组装。
+  - 幂等：用 `Symbol.for(...)` 标记在 `llm` 实例上，热重载不会重复包装；非渠道 provider 原样透传。
+- 升级后需重启 DSH 才会生效（模型目录在启动时装配）。
 
 ### v1.0.3 — 2026-10-22
 
