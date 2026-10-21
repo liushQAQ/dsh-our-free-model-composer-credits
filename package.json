@@ -1,7 +1,7 @@
 {
   "name": "dsh-our-free-model-composer-credits",
-  "version": "1.0.2",
-  "description": "dsh-our-free-model 的衍生插件：在 DSH 对话输入框常驻一枚积分胶囊，显示当前渠道账号余额，点开面板即可秒切优先账号。需先装 dsh-our-free-model。",
+  "version": "1.0.3",
+  "description": "dsh-our-free-model 的衍生插件：在 DSH 对话输入框常驻一枚积分胶囊，显示当前渠道账号余额，点开面板即可秒切优先账号。需先装 dsh-our-free-model（2.5.8 起 WorkBuddy 双渠道已被上游移除）。",
   "keywords": [
     "deepseek-harness",
     "dsh",

@@ -56,13 +56,16 @@ window.__ModuleLoader__.load({
     const STORE_KEY = 'ofm.credits.channel';
 
     /**
-     * channel-pack 的十四个渠道。`short` 是输入框读数用的紧凑名（读数行与宿主的
+     * channel-pack 的十二个账号渠道。`short` 是输入框读数用的紧凑名（读数行与宿主的
      * 权限/agent/模型控件共享空间，必须短），`unit` 决定余额的数字口径。
+     *
+     * 已移除：`buddy`（WorkBuddy 国内版）与 `workbuddy`（WorkBuddy 国际版）。
+     * 上游 `dsh-our-free-model` 2.5.8 起不再注册这两个 provider（发布说明原文：
+     * 「移除 WorkBuddy 国内版和国际版渠道入口，保留历史账号、凭据及用户数据」），
+     * 保留它们只会让胶囊列出永远读不到余额的空白渠道，故一并从本表删除。
      */
     const CHANNELS = [
       { id: 'codearts', name: 'CodeArts', short: 'CodeArts', unit: 'left' },
-      { id: 'buddy', name: 'WorkBuddy 国内版', short: 'WB CN', unit: 'left' },
-      { id: 'workbuddy', name: 'WorkBuddy 国际版', short: 'WB INTL', unit: 'left' },
       { id: 'lobsterai', name: 'LobsterAI', short: 'Lobster', unit: 'left' },
       { id: 'qoder', name: 'Qoder', short: 'Qoder', unit: 'left' },
       { id: 'qodercn', name: 'Qoder 中国版', short: 'Qoder CN', unit: 'left' },

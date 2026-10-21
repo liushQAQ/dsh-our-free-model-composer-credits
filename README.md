@@ -33,6 +33,23 @@ pnpm add github:liushQAQ/dsh-our-free-model-composer-credits
 
 > 为什么不做成内置依赖：`dsh-our-free-model` 是带签名更新、自带数据目录的宿主级插件，装法（npm / 官方 tarball / managed 安装 / 应用内升级）随分发方式不同，硬写进 `dependencies` 会与用户已有的安装方式打架。因此本插件只声明它是**运行时前置**，不代为安装。
 
+## ⚠️ WorkBuddy 双渠道已移除（官方封禁，存在封号风险）
+
+`dsh-our-free-model` **2.5.8 起不再提供 WorkBuddy 渠道**，本插件自 `v1.0.3` 起同步移除了 `buddy`（WorkBuddy 国内版）与 `workbuddy`（WorkBuddy 国际版）两个渠道：胶囊不再显示它们的积分，渠道切换器里也不会再出现这两项。
+
+**上游为什么没了**：WorkBuddy 侧把「非官方客户端经代理调用」判定为未授权渠道，请求在服务端就被拦截：
+
+| 渠道 | 上游报错 |
+| --- | --- |
+| 国内版 `buddy` | `Illegal API invocation from an unapproved channel`（请求被拦截，请重新发送） |
+| 国际版 `workbuddy` | `request illegal`（某一时刻起全模型 100% 失败） |
+
+社区试过改 system prompt、改 agent 身份、补 `X-Conversation-*` 请求头等绕法，**均无法稳定恢复**；上游作者因此在整个 `dsh-our-free-model`（插件端 + 独立端）移除了这两个 provider，渠道数由 13 降为 11。
+
+**风险提示**：WorkBuddy 官方不允许第三方平台代理其额度。**继续用旧版本（≤ 2.5.7）强行调用，有导致 WorkBuddy 账号被封禁的风险**。本插件不再提供这两个渠道的任何入口，也不建议回退旧版恢复它们。
+
+历史账号与凭据仍由 `dsh-our-free-model` 保留（上游承诺「保留历史账号、凭据及用户数据」，不做删除迁移），只是不再有调用入口——所以回退到旧版理论上仍能看到它们，但这正是**不建议**做的事。
+
 ## 它解决什么
 
 `dsh-our-free-model` 的积分只在「设置 → 插件 → Channel Pack」里能看到，输入框没有读数；而 `dsh-connect-workbuddy` / `dsh-connect-trae` 各自带一个胶囊，功能重复。本插件取代它们，在输入框工具行左侧放一枚极轻量的胶囊。
@@ -44,6 +61,12 @@ pnpm add github:liushQAQ/dsh-our-free-model-composer-credits
   - 切号 = 把该账号排到 `account.reorder` 的**首位**，即改写 channel-pack 的自动选号 / 限流换号优先级。
 - **渠道可切换**：面板顶部列出所有还有账号的渠道，点击即切；选择记在 `localStorage`，跨会话保留。
 - **不伪造数字**：读不到余额的行显示 `—`，**绝不显示 0**。
+
+### 支持的渠道（12 个）
+
+`codearts` · `lobsterai` · `qoder` · `qodercn` · `trae` · `cline` · `loomy` · `raccoon` · `minimax` · `zcode` · `gemini` · `opencode`
+
+> 已排除 WorkBuddy 国内版 `buddy` 与国际版 `workbuddy`（原因见上方「WorkBuddy 双渠道已移除」一节）。
 
 ## 依赖
 
@@ -94,6 +117,22 @@ pnpm add https://github.com/liushQAQ/dsh-our-free-model-composer-credits/release
 - 工厂无副作用；样式与字典都在 `apply()` 里用 `ctx.effect` 注册并返回清理函数。
 - 面板走 `ReactDOM.createPortal` 进 `document.body`（仍属 React 树），不 append 第二个应用。
 - 挂载点：`conversation.input.left`（会话级 list 插槽，输入框工具行左侧的紧凑控件位）。
+
+## 变更记录
+
+### v1.0.3 — 2026-10-22
+
+- **移除 WorkBuddy 国内版（`buddy`）/ 国际版（`workbuddy`）两个渠道**：上游 `dsh-our-free-model` 2.5.8 已整体移除这两个 provider（官方封禁非授权渠道调用），本插件的渠道表同步由 14 项精简为 12 项，胶囊与渠道切换器不再出现 WorkBuddy。
+- README 新增「WorkBuddy 双渠道已移除（官方封禁，存在封号风险）」说明与支持的 12 个渠道清单。
+- 余下行为不变：读数、面板、点行秒切、`—` 降级与全部 RPC 契约均未改动。
+
+### v1.0.2 — 2026-10-21
+
+- README / `description` / locale 文案明确写入「必须先装 `dsh-our-free-model`」这一强制前置条件。
+
+### v1.0.1 — 2026-10-20
+
+- 插件按 `dsh-our-free-model-` 前缀规范改名。
 
 ## License
 
