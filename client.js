@@ -43,20 +43,22 @@ window.__ModuleLoader__.load({
     /** 字典命名空间（独占，避免与宿主命名空间冲突）。 */
     const NS = 'ofmComposerCredits';
     /**
-     * 挂载位置：**会话头部按钮区**（顶栏那一行：对话 / 轨迹 / 系统监控 的右侧）。
+     * 挂载位置：**会话区域 tab 栏右侧**（「对话 / 轨迹 / 系统监控」那一行的右端空白）。
      *
      * 🔴 2026-10-23 老总令（原话）：「任何插件看都不要占用这个会话框位置，
      *   占用了压缩原生按钮空间。提示其他玩家。这是规范纳入 dsh 自建插件要求。」
      *   规范全文见仓库 PLUGIN_LAYOUT_RULES.md（会话框禁占区）。
      *
-     * 旧值 = `conversation.input.left`（输入框工具行左侧）—— 那是**原生按钮的地盘**：
-     * 读数胶囊 + 宿主自带的权限/agent/模型控件挤在同一行，430pt 真机上直接把原生
-     * 按钮压窄、叠印（老总 2026-10-23 08:51 截图实锤：模型按钮只剩 5px 宽）。
-     * 迁到 `conversation.session.header.actions` 后：会话框里一个插件元素都不留，
-     * 原生按钮拿到完整宽度；桌面端与手机端同一套前端，两端同时生效。
+     * 迁移史：`conversation.input.left`（输入框工具行左侧，挤压原生按钮）
+     *   → `conversation.session.header.actions`（标题行，还不是老总要的位置）
+     *   → **tab 栏**（本版）。tab 栏由 `conversation.view` 槽的注册项渲染而成，
+     *   「轨迹」「系统监控」本身就是插件贡献的，所以这一行天生是插件可用的地盘；
+     *   容器带稳定语义属性 `data-conversation-tabs`，用 ReactDOM.createPortal 把胶囊
+     *   投进去即可与「系统监控」并排，**电脑端与手机端同一套前端，两端同时生效**，
+     *   不需要 App 侧任何定位干预。
      *
-     * 通用性：header.actions 是 DSH 官方公开 slot（dsh-anywhere / agent-teams 均在用），
-     * 不依赖任何本机特有结构，其他玩家装同一个包得到同样的位置。
+     * 本 SLOT 保留为**降级位**：取不到 tab 栏（hero 空态 / DSH 改结构 / 外部页）时，
+     *   胶囊退回这里渲染，绝不整块消失。
      */
     const SLOT = 'conversation.session.header.actions';
     /** 样式类前缀，避免与宿主 CSS module 撞名。 */
@@ -142,6 +144,15 @@ window.__ModuleLoader__.load({
 
     const CSS = `
 .${P}root { display: inline-flex; align-items: center; }
+/* 投进会话区域 tab 栏（对话 / 轨迹 / 系统监控 那一行）时的落位：
+   tab 栏是 display:flex; gap:36px; padding-left:8px 的容器，默认 align-items:stretch
+   会把 24px 的胶囊拉满整行高度（看起来像一整块），必须 align-self:center 钉住中线；
+   flex:none 防窄屏被压缩；margin-left:-14px 把 36px 的 gap 收到 22px，视觉紧挨「系统监控」。
+   order:1 —— 老总 2026-10-23 12:28 定序：**积分胶囊在左、提示词优化在右**。
+   提示词优化点开会展开「撤回 / 重优」，变长后必须往右边空白长，绝不能盖住别人。 */
+[data-conversation-tabs] > .${P}root {
+  align-self: center; flex: none; margin-left: -14px; max-width: 100%; order: 1;
+}
 .${P}btn {
   display: inline-flex; align-items: center; gap: 6px;
   height: 24px; padding: 0 8px; border-radius: 6px;
@@ -351,6 +362,53 @@ window.__ModuleLoader__.load({
         };
       }, [open]);
       return [ref, rect];
+    }
+
+    /**
+     * 找到会话区域「对话 / 轨迹 / 系统监控」那一行 tab 栏的容器。
+     *
+     * 🔴 2026-10-23 12:01 老总纠正（原话）：
+     *   「对话 轨迹 系统监控，旁边可以放。**轨迹 系统监控 就是 dsh 插件
+     *    （dsh-system-monitor-plugin）生成的啊，不是官方原生按钮**。
+     *    所以积分胶囊和提示词插件按钮！也可以做到放这里啊。」
+     *
+     *   查官方源码 `@deepseek-ai/dsh-client-ui-conversation/lib/client.js` 确认：
+     *     <div role="tablist" data-conversation-tabs="" class={styles.tabs}>
+     *       {tabs.map(v => <button role="tab" class={styles.tab}>{v.label}</button>)}
+     *     </div>
+     *   容器是 `display:flex; gap:36px; padding-left:8px; grid-column:1/-1`，三个 tab
+     *   只占左端一小段，**右侧全是空 flex 空间**；tabs 来自 `conversation.view` 槽的
+     *   全部注册项（对话=官方、轨迹=官方 ui-trajectory、系统监控=第三方插件），
+     *   所以这一行天生就是「官方 + 插件共用」的地盘，插件往里放东西不需要官方 slot。
+     *
+     * 锚点用 `data-conversation-tabs`（**稳定语义属性**），绝不用 CSS Module 哈希类名
+     *   （`ank0OG_tabs` / 旧版 `_727C8a_tabs` 换版即失效）。
+     *
+     * 取不到时返回 null → 调用方回退到 slot 原位渲染（DSH 升级改掉语义属性时仍可用）。
+     */
+    const TABLIST_SELECTOR = '[data-conversation-tabs]';
+    function useTabBar() {
+      const [bar, setBar] = useState(null);
+      useEffect(() => {
+        if (typeof document === 'undefined') return undefined;
+        let alive = true;
+        const seek = () => {
+          const el = document.querySelector(TABLIST_SELECTOR);
+          if (el === null) return false;
+          setBar(el);
+          return true;
+        };
+        if (seek()) return undefined;
+        // tab 栏只在「有会话且 tabs.length>1」时渲染，出现时机晚于本组件挂载 → 轻量轮询
+        const timer = setInterval(() => {
+          if (!alive || seek()) clearInterval(timer);
+        }, 500);
+        return () => {
+          alive = false;
+          clearInterval(timer);
+        };
+      }, []);
+      return bar;
     }
 
     /* ────────────────────────── 面板 ────────────────────────── */
@@ -605,6 +663,8 @@ window.__ModuleLoader__.load({
       const [reading, setReading] = useState(false);
       const [open, setOpen] = useState(false);
       const [anchorRef, rect] = useAnchorRect(open);
+      // 目标：会话区域 tab 栏（对话 / 轨迹 / 系统监控 那一行）右侧空白处。
+      const tabBar = useTabBar();
       const generation = useRef(0);
       const resolved = useRef(false);
 
@@ -724,9 +784,9 @@ window.__ModuleLoader__.load({
 
       const label = `${meta?.short ?? t('credits.title')} · ${readout}`;
 
-      return h(
+      const capsule = h(
         'div',
-        { className: `${P}root` },
+        { className: `${P}root`, 'data-dcc-intabs': tabBar === null ? '0' : '1' },
         h(
           'button',
           {
@@ -745,6 +805,14 @@ window.__ModuleLoader__.load({
           h('span', null, meta?.short ?? t('credits.title')),
           h('span', { className: `${P}value`, 'data-unknown': value === null ? 'true' : 'false' }, readout),
         ),
+      );
+
+      // 胶囊本体投到 tab 栏（与「系统监控」并排）；面板仍 portal 到 body 做浮层。
+      // 取不到 tab 栏（hero 空态 / DSH 改结构 / 外部页）→ 原位渲染，绝不整块消失。
+      const capsuleNode =
+        tabBar === null ? capsule : ReactDOM.createPortal(capsule, tabBar);
+
+      const panelNode =
         open && channel !== null
           ? ReactDOM.createPortal(
               h(Panel, {
@@ -757,8 +825,9 @@ window.__ModuleLoader__.load({
               }),
               document.body,
             )
-          : null,
-      );
+          : null;
+
+      return h(React.Fragment, null, capsuleNode, panelNode);
     }
 
     /* ────────────────────────── 插件本体 ────────────────────────── */

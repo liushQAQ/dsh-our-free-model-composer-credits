@@ -1,6 +1,6 @@
 # dsh-our-free-model-composer-credits
 
-[`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model) 的**衍生插件**：在 DSH（DeepSeek Harness）**会话头部**常驻一枚**积分胶囊**，一眼看到当前渠道的账号余额，点开面板即可**秒切优先账号**。
+[`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model) 的**衍生插件**：在 DSH（DeepSeek Harness）**会话 tab 栏**（「对话 / 轨迹 / 系统监控」那一行）常驻一枚**积分胶囊**，一眼看到当前渠道的账号余额，点开面板即可**秒切优先账号**。
 
 ![积分胶囊](icon.svg)
 
@@ -119,10 +119,30 @@ pnpm add https://github.com/liushQAQ/dsh-our-free-model-composer-credits/release
 - 只用 `--dsw-alias-*` 主题 token，不写死颜色，浅色 / 深色自动跟随。
 - 工厂无副作用；样式与字典都在 `apply()` 里用 `ctx.effect` 注册并返回清理函数。
 - 面板走 `ReactDOM.createPortal` 进 `document.body`（仍属 React 树），不 append 第二个应用。
-- 挂载点：`conversation.session.header.actions`（会话头部按钮区，与「智能体团队」「创造模式」并排）。
+- 挂载点：注册在 `conversation.session.header.actions`（**降级位**），实际渲染用 `ReactDOM.createPortal` 投进会话区域 **tab 栏** `[data-conversation-tabs]`，与「对话 / 轨迹 / 系统监控」并排。
+- **tab 栏为什么能放**：那一行由 `conversation.view` 槽的注册项渲染而成，「轨迹」「系统监控」本身就是插件贡献的，所以它是官方与插件共用的地盘，插件往里放东西**不需要官方 slot**。
+- 锚点用 `data-conversation-tabs`（**稳定语义属性**），绝不用 CSS Module 哈希类名（`ank0OG_tabs` / 旧版 `_727C8a_tabs` 换版即失效）。
+- 取不到 tab 栏（hero 空态 / DSH 改结构 / 外部页）→ 退回注册位渲染，**绝不整块消失**。
 - **不占用会话框**：本插件任何版本都不得 `inject` `conversation.input.*` 系列 slot——那是原生按钮的地盘，挤进去会把「+ / 语音 / 权限 / 模型 / 发送」压窄甚至压没。
 
 ## 变更记录
+
+### v1.3.0 — 2026-10-23
+
+- **位置终定：胶囊投进会话区域 tab 栏**（「对话 / 轨迹 / 系统监控」那一行的右侧空白）。
+  老总 12:01 原话：「对话 轨迹 系统监控，旁边可以放。**轨迹 系统监控 就是 dsh 插件
+  （dsh-system-monitor-plugin）生成的啊，不是官方原生按钮**。所以积分胶囊和提示词插件
+  按钮！也可以做到放这里啊。原生会话框任何按钮都不要动。」
+- 实现：注册位仍是 `conversation.session.header.actions`（降级位），组件里用
+  `ReactDOM.createPortal(capsule, document.querySelector('[data-conversation-tabs]'))`
+  投进 tab 栏；tab 栏是 `display:flex; gap:36px` 的容器，靠 `align-self:center` +
+  `margin-left:-14px` 贴住「系统监控」。
+- **收益：电脑端与手机端同一套前端，两端同时到同一个位置**，不再需要 App 侧任何
+  `position:fixed` 搬运——原生按钮零接触。
+- **降级**：取不到 tab 栏（无会话的 hero 空态 / DSH 改结构 / 外部页）时原位渲染，不消失。
+- **与提示词优化插件的左右次序（老总 12:28 定序）**：tab 栏内 **积分胶囊在左（`order:1`）、
+  提示词优化在右（`order:2`）**。原因：提示词优化点「优化」后会展开「撤回 / 重优」，
+  宽度从 85px 长到 238px；排最右时它只往右侧空白处长，不会遮挡任何插件。
 
 ### v1.2.0 — 2026-10-23
 
