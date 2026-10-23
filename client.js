@@ -160,9 +160,16 @@ window.__ModuleLoader__.load({
       不创建 containing block（弹层 portal 到 body，不受影响）。
       若官方改了 tab 的 padding-bottom，这个值要跟着改（= padding-bottom / 2）。 */
 [data-conversation-tabs] > .${P}root {
-  align-self: center; flex: none; margin-left: -14px; max-width: 100%; order: 1;
-  position: relative; top: -4.5px;
+  align-self: center; flex: 0 1 auto; min-width: 34px; margin-left: -14px;
+  max-width: 100%; order: 1; position: relative; top: -4.5px;
 }
+/* 窄屏（390 及以下）三个 tab 已经占 184px，两个胶囊加起来放不下 —— 允许 flex 收缩，
+   文字出省略号，绝不越出屏幕、绝不重叠。宽屏 flex-grow:0 + basis:auto → 宽度不变。 */
+[data-conversation-tabs] > .${P}root .${P}btn { min-width: 0; overflow: hidden; }
+[data-conversation-tabs] > .${P}root .${P}btn > span {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+[data-conversation-tabs] > .${P}root .${P}dot { flex: none; }
 .${P}btn {
   display: inline-flex; align-items: center; gap: 6px;
   height: 24px; padding: 0 8px; border-radius: 6px;
