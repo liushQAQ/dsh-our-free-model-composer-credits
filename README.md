@@ -1,6 +1,6 @@
 # dsh-our-free-model-composer-credits
 
-[`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model) 的**衍生插件**：在 DSH（DeepSeek Harness）对话输入框常驻一枚**积分胶囊**，一眼看到当前渠道的账号余额，点开面板即可**秒切优先账号**。
+[`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model) 的**衍生插件**：在 DSH（DeepSeek Harness）**会话头部**常驻一枚**积分胶囊**，一眼看到当前渠道的账号余额，点开面板即可**秒切优先账号**。
 
 ![积分胶囊](icon.svg)
 
@@ -52,7 +52,7 @@ pnpm add github:liushQAQ/dsh-our-free-model-composer-credits
 
 ## 它解决什么
 
-`dsh-our-free-model` 的积分只在「设置 → 插件 → Channel Pack」里能看到，输入框没有读数；而 `dsh-connect-workbuddy` / `dsh-connect-trae` 各自带一个胶囊，功能重复。本插件取代它们，在输入框工具行左侧放一枚极轻量的胶囊。
+`dsh-our-free-model` 的积分只在「设置 → 插件 → Channel Pack」里能看到，会话框里没有读数；而 `dsh-connect-workbuddy` / `dsh-connect-trae` 各自带一个胶囊，功能重复。本插件取代它们，在**会话头部按钮区**放一枚极轻量的胶囊（**不放进输入框**，避免压缩原生按钮）。
 
 第二个问题：不同平台经常有同名模型（多家都叫 `DeepSeek-V4.1-Flash`），模型选择器里只显示模型原名，分不出这条请求要发给哪个平台。本插件的宿主半体会给各渠道的模型名加上平台前缀，显示成 `LobsterAI · DeepSeek-V4.1-Flash · x0.05` 这种形式。
 
@@ -119,9 +119,22 @@ pnpm add https://github.com/liushQAQ/dsh-our-free-model-composer-credits/release
 - 只用 `--dsw-alias-*` 主题 token，不写死颜色，浅色 / 深色自动跟随。
 - 工厂无副作用；样式与字典都在 `apply()` 里用 `ctx.effect` 注册并返回清理函数。
 - 面板走 `ReactDOM.createPortal` 进 `document.body`（仍属 React 树），不 append 第二个应用。
-- 挂载点：`conversation.input.left`（会话级 list 插槽，输入框工具行左侧的紧凑控件位）。
+- 挂载点：`conversation.session.header.actions`（会话头部按钮区，与「智能体团队」「创造模式」并排）。
+- **不占用会话框**：本插件任何版本都不得 `inject` `conversation.input.*` 系列 slot——那是原生按钮的地盘，挤进去会把「+ / 语音 / 权限 / 模型 / 发送」压窄甚至压没。
 
 ## 变更记录
+
+### v1.2.0 — 2026-10-23
+
+- **破坏性位置变更：胶囊从输入框工具行迁到会话头部**。
+  `SLOT` 由 `conversation.input.left` 改为 `conversation.session.header.actions`。
+  原因：旧位置与宿主原生按钮同处一行，窄屏（430pt）下积分胶囊挤占 104px，
+  把官方模型选择器压到 **5px 宽**、标签宽 0，用户完全看不见模型按钮。
+  新位置在会话标题行右侧，与「智能体团队」「创造模式」并排，原生按钮拿到完整宽度。
+- **面板方向自适应**：`useAnchorRect` 补 `height`，面板按锚点位置判断——
+  锚点在上半屏向下展开、在下半屏向上展开。旧版恒定向上展开，迁到顶栏后面板会飞出屏幕。
+- **规范来源**：`PLUGIN_LAYOUT_RULES.md`（插件永不占用会话框、永不压缩原生按钮）。
+  后续任何改动都必须遵守，禁止再 `inject` 任何 `conversation.input.*` slot。
 
 ### v1.1.0 — 2026-10-22
 

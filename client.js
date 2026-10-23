@@ -42,8 +42,23 @@ window.__ModuleLoader__.load({
 
     /** 字典命名空间（独占，避免与宿主命名空间冲突）。 */
     const NS = 'ofmComposerCredits';
-    /** 本插件只碰这一个 seat：输入框工具行左侧的紧凑控件位。 */
-    const SLOT = 'conversation.input.left';
+    /**
+     * 挂载位置：**会话头部按钮区**（顶栏那一行：对话 / 轨迹 / 系统监控 的右侧）。
+     *
+     * 🔴 2026-10-23 老总令（原话）：「任何插件看都不要占用这个会话框位置，
+     *   占用了压缩原生按钮空间。提示其他玩家。这是规范纳入 dsh 自建插件要求。」
+     *   规范全文见仓库 PLUGIN_LAYOUT_RULES.md（会话框禁占区）。
+     *
+     * 旧值 = `conversation.input.left`（输入框工具行左侧）—— 那是**原生按钮的地盘**：
+     * 读数胶囊 + 宿主自带的权限/agent/模型控件挤在同一行，430pt 真机上直接把原生
+     * 按钮压窄、叠印（老总 2026-10-23 08:51 截图实锤：模型按钮只剩 5px 宽）。
+     * 迁到 `conversation.session.header.actions` 后：会话框里一个插件元素都不留，
+     * 原生按钮拿到完整宽度；桌面端与手机端同一套前端，两端同时生效。
+     *
+     * 通用性：header.actions 是 DSH 官方公开 slot（dsh-anywhere / agent-teams 均在用），
+     * 不依赖任何本机特有结构，其他玩家装同一个包得到同样的位置。
+     */
+    const SLOT = 'conversation.session.header.actions';
     /** 样式类前缀，避免与宿主 CSS module 撞名。 */
     const P = 'dcc-';
     /** 胶囊按钮的锚点标记（面板判断「点的是自己」用）。 */
@@ -313,7 +328,9 @@ window.__ModuleLoader__.load({
       return { available: transport !== null, rpc };
     }
 
-    /** 锚定定位：面板贴住胶囊按钮，优先向上展开（输入框在底部）。 */
+    /** 锚定定位：面板贴住胶囊按钮。方向**自适应**——按钮在上半屏向下展开（顶栏停靠），
+     *  在下半屏向上展开（万一其他玩家仍把它放回底部区域）。
+     *  🔴 2026-10-23：迁到会话头部后必须支持向下展开，否则面板会跑到屏幕外。 */
     function useAnchorRect(open) {
       const ref = useRef(null);
       const [rect, setRect] = useState(null);
@@ -323,7 +340,7 @@ window.__ModuleLoader__.load({
           const node = ref.current;
           if (!node) return;
           const box = node.getBoundingClientRect();
-          setRect({ left: box.left, top: box.top, width: box.width });
+          setRect({ left: box.left, top: box.top, width: box.width, height: box.height });
         };
         update();
         window.addEventListener('resize', update);
@@ -466,10 +483,17 @@ window.__ModuleLoader__.load({
       const style =
         rect === null
           ? { left: 12, bottom: 12 }
-          : {
-              left: Math.max(8, Math.min(rect.left, (window.innerWidth || 0) - width - 8)),
-              bottom: Math.max(8, (window.innerHeight || 0) - rect.top + 6),
-            };
+          : (function () {
+              const vw = window.innerWidth || 0;
+              const vh = window.innerHeight || 0;
+              const left = Math.max(8, Math.min(rect.left, vw - width - 8));
+              // 锚点在上半屏 → 向下展开（会话头部停靠）；下半屏 → 向上展开（底部输入行）。
+              if (rect.top < vh / 2) {
+                const h = rect.height || 28;
+                return { left, top: Math.max(8, rect.top + h + 6) };
+              }
+              return { left, bottom: Math.max(8, vh - rect.top + 6) };
+            })();
 
       const rows = accounts ?? [];
       const unit = meta?.unit ?? 'left';
