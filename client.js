@@ -149,9 +149,19 @@ window.__ModuleLoader__.load({
    会把 24px 的胶囊拉满整行高度（看起来像一整块），必须 align-self:center 钉住中线；
    flex:none 防窄屏被压缩；margin-left:-14px 把 36px 的 gap 收到 22px，视觉紧挨「系统监控」。
    order:1 —— 老总 2026-10-23 12:28 定序：**积分胶囊在左、提示词优化在右**。
-   提示词优化点开会展开「撤回 / 重优」，变长后必须往右边空白长，绝不能盖住别人。 */
+   提示词优化点开会展开「撤回 / 重优」，变长后必须往右边空白长，绝不能盖住别人。
+
+   🔴 top:-4.5px —— 老总 2026-10-23 12:48：「轨迹 系统监控 Loomy 不在一个水平高度」。
+      真因（实测）：tab 按钮是 padding: 0 0 9px（底下 9px 给选中态下划线留位），
+      所以它的**文字**中心比按钮几何中心高 9/2 = **4.5px**；
+      胶囊是整个元素垂直居中的，对齐的是几何中心（实测 tab 文字 cy=58.5，
+      胶囊 cy=63）→ 视觉上胶囊偏低 4.5px。
+      用 position:relative + top 补偿：不改布局流、不改容器高度、
+      不创建 containing block（弹层 portal 到 body，不受影响）。
+      若官方改了 tab 的 padding-bottom，这个值要跟着改（= padding-bottom / 2）。 */
 [data-conversation-tabs] > .${P}root {
   align-self: center; flex: none; margin-left: -14px; max-width: 100%; order: 1;
+  position: relative; top: -4.5px;
 }
 .${P}btn {
   display: inline-flex; align-items: center; gap: 6px;
