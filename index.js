@@ -1,19 +1,23 @@
 /**
  * dsh-our-free-model-composer-credits — 宿主半体。
  *
- * 本插件有两个半体，各管一件事：
+ * 本插件有两个半体，各管两件事：
  *
- * 1. Client 半体（`client.js`）：在对话输入框左侧常驻一枚「渠道 · 余额」积分胶囊，
+ * 1. Client 半体（`client.js`）：在会话 tab 栏常驻一枚「渠道 · 余额」积分胶囊，
  *    点开面板可切换优先账号。它靠 package.json 的 `dsh.client` 声明与
  *    `exports["./client"]` 被 dsh-client-modules 发现并注入页面。
  *
- * 2. 宿主半体（本文件）：给 dsh-our-free-model 各渠道的模型名加上平台前缀，
- *    解决「不同平台存在同名模型、界面上分不出是哪个平台」的问题。
- *    显示效果示例：`LobsterAI · DeepSeek-V4.1-Flash · x0.05`。
+ * 2. 宿主半体（本文件 + `cli-credits.js`）：
+ *    - 给 dsh-our-free-model 各渠道的模型名加上平台前缀，解决「不同平台存在同名模型、
+ *      界面上分不出是哪个平台」的问题。显示效果示例：`LobsterAI · DeepSeek-V4.1-Flash · x0.05`。
+ *    - 注册 `/api/cli-credits`，给胶囊面板提供三条 CLI 反代通道（wb-cli / zcode-cli /
+ *      qodercn-cli）的平台额度读数 —— 它们的凭证不在 channel-pack 账号池里。
  *
  * 宿主半体必须是能被 Loader import 的合法模块：导出 name / inject / apply，
  * 否则 `EntryTree.import` 无法为该 entry 建 fiber，客户端 bundle 也就不会被扫描到。
  */
+
+import { registerCliCredits } from './cli-credits.js'
 
 export const name = 'dsh-our-free-model-composer-credits';
 
@@ -82,6 +86,9 @@ const APPLIED = Symbol.for('dsh-our-free-model-composer-credits.host.applied');
  * @param ctx - 插件上下文（`inject` 保证 `ctx.llm` 已就绪）。
  */
 export function apply(ctx) {
+  // CLI 通道额度 RPC 与模型名前缀互不依赖：先挂 RPC，llm 不在时前缀改写直接跳过。
+  registerCliCredits(ctx);
+
   const llm = ctx === undefined || ctx === null ? undefined : ctx.llm;
   if (llm === undefined || llm === null) return;
   if (llm[APPLIED] === true) return;

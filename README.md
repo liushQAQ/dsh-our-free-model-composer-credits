@@ -1,6 +1,6 @@
 # dsh-our-free-model-composer-credits
 
-[`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model) 的**衍生插件**：在 DSH（DeepSeek Harness）**会话 tab 栏**（「对话 / 轨迹 / 系统监控」那一行）常驻一枚**积分胶囊**，一眼看到当前渠道的账号余额，点开面板即可**秒切优先账号**。
+[`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model) 的**衍生插件**：在 DSH（DeepSeek Harness）**会话 tab 栏**（「对话 / 轨迹 / 系统监控」那一行）常驻一枚**积分胶囊**，一眼看到当前渠道的账号余额，点开面板即可**秒切优先账号**；装了 CLI 反代插件时还会只读显示 ZCode / Qoder CN / WorkBuddy 的平台额度。
 
 ![积分胶囊](icon.svg)
 
@@ -8,7 +8,7 @@
 
 ## ⚠️ 强制前置条件：必须先装 `dsh-our-free-model`
 
-**这不是可选依赖，是硬性安装前提。** 本插件自己**不联网、不持凭证、不读任何账号数据**——它显示的所有积分、账号列表、切号动作，全部来自 [`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model) 内嵌的 `channel-pack` 提供的 RPC。
+**这不是可选依赖，是硬性安装前提。** 本插件的**渠道账号读数与切号**全部来自 [`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model) 内嵌的 `channel-pack` 提供的 RPC；只有**CLI 反代通道**（可选）由本插件宿主半体直读本机 CLI 凭据（见下方「CLI 反代通道」一节）。
 
 所以：
 
@@ -64,12 +64,25 @@ pnpm add github:liushQAQ/dsh-our-free-model-composer-credits
 - **渠道可切换**：面板顶部列出所有还有账号的渠道，点击即切；选择记在 `localStorage`，跨会话保留。
 - **不伪造数字**：读不到余额的行显示 `—`，**绝不显示 0**。
 - **模型名带平台前缀**：宿主半体在模型目录的读取出口（`llm.listModels` / `llm.resolveModelInfo`）给上述 12 个渠道的模型名加上平台前缀，同名模型一眼可辨。只改 `name` 这一个显示字段，`id` / 路由 / 上下文元数据都不动；不属于渠道包的 provider 原样透传。
+- **CLI 反代通道读数**：装了 `dsh-zcode-cli-proxy` / `dsh-qodercn-cli-proxy` / `dsh-wb-cli-proxy` 任一插件时，芯片条自动多出对应平台，只读展示平台额度（账号不可切）。没装的反代不会出现空条目。
 
 ### 支持的渠道（12 个）
 
 `codearts` · `lobsterai` · `qoder` · `qodercn` · `trae` · `cline` · `loomy` · `raccoon` · `minimax` · `zcode` · `gemini` · `opencode`
 
 > 已排除 WorkBuddy 国内版 `buddy` 与国际版 `workbuddy`（原因见上方「WorkBuddy 双渠道已移除」一节）。
+
+### CLI 反代通道（可选，3 个）
+
+| 芯片 | provider | 额度来源 |
+| --- | --- | --- |
+| `ZCode CLI` | `zcode-cli` | 本机 `~/.zcode/v2/credentials.json` → ZCode Start Plan `billing/balance`（token 口径） |
+| `Qoder CN CLI` | `qodercn-cli` | 本机 CLI 登录名与 channel-pack `qodercn` 池核对一致后，复用池余额；不一致只报登录名 |
+| `WB CLI` | `wb-cli` | `dsh-connect-workbuddy` 的只读积分端点（与 CLI 同一份 vault） |
+
+- ZCode CLI 的凭证只在本机磁盘上，**不会**上传到本插件或第三方；解密后仅用于向 `zcode.z.ai` 查询自己的额度。
+- Qoder CN CLI 的令牌加密且没有额度查询接口，所以只能读登录名；额度按同账号复用渠道池读数。
+- 三条通道都是**只读**：面板里账号行不可点击切换，没有签到 / 领取动作。
 
 ## 依赖
 
@@ -113,6 +126,13 @@ pnpm add https://github.com/liushQAQ/dsh-our-free-model-composer-credits/release
 
 客户端通过宿主 `connection` 服务的 `rpc.call(connection.rpc, '/api', 'channel-pack', { method, payload }, signal)` 调用。`connection` 是**机会式读取**：拿不到就降级显示，绝不让整个插槽崩掉。
 
+CLI 反代通道走本插件宿主半体注册的另一个端点 `/api/cli-credits`（协议与 channel-pack 同构，客户端复用同一个调用器）：
+
+| RPC | 用途 |
+| --- | --- |
+| `cli.channels` | 返回宿主已注册的 CLI 反代 provider，决定芯片条显示哪几条 |
+| `cli.balances` | `{provider}` → `{accounts:[{accountId, nickname, balance, error?}]}`，与 channel-pack 的 `CreditBalance` 同形 |
+
 ## 设计约束
 
 - 不 `require` 任何 `@deepseek-ai/dsh-client-ui-*` 包；控件自写、样式自持。
@@ -126,6 +146,16 @@ pnpm add https://github.com/liushQAQ/dsh-our-free-model-composer-credits/release
 - **不占用会话框**：本插件任何版本都不得 `inject` `conversation.input.*` 系列 slot——那是原生按钮的地盘，挤进去会把「+ / 语音 / 权限 / 模型 / 发送」压窄甚至压没。
 
 ## 变更记录
+
+### v1.5.0 — 2026-10-30
+
+- **新增 CLI 反代三通道读数**：胶囊芯片条按已安装的反代插件自动出现 `ZCode CLI` / `Qoder CN CLI` / `WB CLI`，只读展示平台额度。
+- 宿主半体新增 `/api/cli-credits`（`cli.channels` / `cli.balances`），读数统一成 channel-pack 的 `CreditBalance` 形状，面板与胶囊复用同一套渲染。
+  - `ZCode CLI` 直读 `~/.zcode/v2/credentials.json`（AES-256-GCM 解密），查 Start Plan `billing/balance`；channel-pack 池里的 `zcode` 是**另一个账号**，不能混用。
+  - `Qoder CN CLI` 令牌无额度接口，只读登录名；与渠道池 `qodercn` 登录名核对一致后复用池余额，不一致只显示登录名。
+  - `WB CLI` 走 `dsh-connect-workbuddy` 的只读积分端点。
+- token 口径读数改用紧凑显示（`12.34M` / `5.67K`），避免百万级额度撑爆胶囊。
+- 读不到额度时保留 `error` 字段并在行上显示原因，**绝不伪造 0**。
 
 ### v1.3.0 — 2026-10-23
 

@@ -96,7 +96,31 @@ window.__ModuleLoader__.load({
       { id: 'opencode', name: 'OpenCode', short: 'OpenCode', unit: 'left' },
     ];
     const CHANNEL_IDS = CHANNELS.map(channel => channel.id);
-    const CHANNEL_BY_ID = new Map(CHANNELS.map(channel => [channel.id, channel]));
+
+    /**
+     * CLI 反代三渠道（2026-10-30 老总令）：id 就是三个反代插件注册的真实
+     * provider id（`zcode-cli` / `qodercn-cli` / `wb-cli`），烧的是平台额度，
+     * 不是 channel-pack 账号池。id 与 provider 同名，模型选择器选中 CLI 模型时
+     * 胶囊经 `channelOfProvider` 直接锁定到对应平台读数。
+     *
+     * `reader` 决定读数来源：
+     * - `wb`：dsh-connect-workbuddy 的只读积分端点（与 wb-cli 读同一份 vault）。
+     * - `cli`：本插件宿主半体的 `/api/cli-credits` —— zcode-cli 的凭证只在本机
+     *   `~/.zcode` 里，而 channel-pack 池里的 `zcode` 是**另一个账号**，混用会
+     *   显示别人的额度。
+     * - `channel`：qodercn-cli 的本机登录账号与 channel-pack 的 `qodercn` 池是
+     *   同一账号，直接复用 `credits.balances`；读数前先核对登录名，不一致就
+     *   报错而不是把池里那个账号的额度冒充给它。
+     */
+    const CLI_CHANNELS = [
+      { id: 'zcode-cli', name: 'ZCode CLI', short: 'ZCode CLI', unit: 'tokens', cli: 'zcode', reader: 'cli' },
+      { id: 'qodercn-cli', name: 'Qoder CN CLI', short: 'Qoder CN CLI', unit: 'left', cli: 'qodercn', reader: 'channel' },
+      { id: 'wb-cli', name: 'WorkBuddy CLI', short: 'WB CLI', unit: 'left', cli: 'workbuddy', reader: 'wb' },
+    ];
+    const CLI_CHANNEL_IDS = CLI_CHANNELS.map(channel => channel.id);
+    const CHANNEL_BY_ID = new Map(
+      [...CHANNELS, ...CLI_CHANNELS].map(channel => [channel.id, channel]),
+    );
 
     /**
      * 模型选择器里的 OFM 路由（正本 `src/adapter.js:36-37`）。它们**不是**渠道 id：
@@ -119,7 +143,10 @@ window.__ModuleLoader__.load({
         'panel.disabled': '已停用',
         'panel.close': '关闭',
         'panel.empty': '该渠道还没有账号，请到「设置 → 插件 → Our Free Model → 渠道」添加。',
+        'panel.emptyCli': '未读到 CLI 反代凭据：请先在对应 CLI 登录，再点刷新。',
         'panel.hint': '点一行即把该账号排到最前（秒切优先账号）。',
+        'panel.hintCli': 'CLI 反代通道：只读展示平台额度，刷新即同步。',
+        'panel.cliBadge': 'CLI',
         'panel.failed': '操作失败：{reason}',
         'panel.accounts': '{count} 个账号',
       },
@@ -136,7 +163,10 @@ window.__ModuleLoader__.load({
         'panel.disabled': 'Disabled',
         'panel.close': 'Close',
         'panel.empty': 'No account on this channel. Add one in Settings → Plugins → Our Free Model → Channels.',
+        'panel.emptyCli': 'No CLI credential found — log in with the CLI first, then refresh.',
         'panel.hint': 'Click a row to move that account to the front.',
+        'panel.hintCli': 'CLI relay channel: read-only platform quota, refreshed in place.',
+        'panel.cliBadge': 'CLI',
         'panel.failed': 'Failed: {reason}',
         'panel.accounts': '{count} accounts',
       },
@@ -203,7 +233,7 @@ window.__ModuleLoader__.load({
 }
 .${P}mini:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .${P}mini:disabled { opacity: 0.5; cursor: default; }
-.${P}chips { display: flex; gap: 6px; padding: 8px 10px; overflow-x: auto; border-bottom: 1px solid var(--dsw-alias-border-l1); }
+.${P}chips { display: flex; gap: 6px; padding: 8px 10px; overflow-x: auto; border-bottom: 1px solid var(--dsw-alias-border-l1); scrollbar-width: thin; }
 .${P}chip {
   flex: none; height: 22px; padding: 0 9px; border-radius: 11px;
   border: 1px solid var(--dsw-alias-border-l1); background: transparent;
@@ -217,6 +247,7 @@ window.__ModuleLoader__.load({
 .${P}row:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .${P}row[data-current="true"] { background: var(--dsw-alias-bg-layer-2); }
 .${P}row[data-disabled="true"] { opacity: 0.55; cursor: default; }
+.${P}row[data-readonly="true"] { cursor: default; }
 .${P}row[data-busy="true"] { opacity: 0.6; cursor: progress; }
 .${P}nick { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .${P}badge {
@@ -266,20 +297,105 @@ window.__ModuleLoader__.load({
       return String(rounded).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     }
 
+    /** token 口径要紧凑（ZCode 的额度是百万级，千分位会撑爆胶囊）。 */
+    function compact(value) {
+      if (!Number.isFinite(value)) return null;
+      const abs = Math.abs(value);
+      if (abs >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
+      if (abs >= 1e3) return `${(value / 1e3).toFixed(2)}K`;
+      return String(Math.round(value));
+    }
+
     /** 余额对象 → 显示串；读不到就是 null，绝不伪造 0。 */
     function balanceText(balance, unit) {
       const total = balance?.total;
       if (!Number.isFinite(total)) return null;
       if (unit === 'dollars') return `$${kilo(total)}`;
+      if (unit === 'tokens') return compact(total);
       return kilo(total);
     }
 
+    /** WorkBuddy 只读积分端点（dsh-connect-workbuddy 注册在宿主 webServer，同源）。 */
+    const WB_CREDITS_URL = '/plugins/dsh-connect-workbuddy/account-credits?region=cn';
+
     /**
-     * channel-pack 的 RPC 通道。与 `vendor/dsh-our-free-model/client.js:4036-4078`
-     * 完全同构：`connection` 是机会式读取，拿不到时 available=false，调用抛错，
-     * 由调用方降级而不是让插槽崩掉。
+     * CLI 反代渠道读数：统一成 channel-pack 的账号行形状
+     * `{ accountId, nickname, balance, error? }`，面板与胶囊共用同一套渲染。
+     *
+     * ⚠️ 读不到额度时**带 error 字段**（卡片显示原因），绝不给 0 —— 0 是
+     * 「额度已用光」的语义，把「读取失败」显示成 0 会让用户误判。
+     *
+     * @param meta - `CLI_CHANNELS` 里的条目。
+     * @param calls - `{rpc, cliRpc}`：channel-pack 与 `/api/cli-credits` 两个通道。
+     * @param force - 面板「刷新」：让支持缓存的渠道重抓。
      */
-    function useChannelRpc(ctx) {
+    async function readCliRows(meta, calls, force) {
+      if (meta.reader === 'wb') {
+        const response = await fetch(WB_CREDITS_URL, {
+          cache: 'no-store',
+          credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error(`WorkBuddy 积分端点 HTTP ${response.status}`);
+        const value = await response.json();
+        return (value?.accounts ?? []).map(account => {
+          const credits = account?.credits;
+          const known = Number.isFinite(credits);
+          return {
+            accountId: account?.id ?? 'unknown',
+            nickname: account?.accountName ?? account?.id ?? 'WorkBuddy',
+            balance: known ? { total: credits } : null,
+            ...(known ? {} : { error: '额度读取失败（账号未登录或凭据已过期）' }),
+          };
+        });
+      }
+      if (meta.reader === 'cli') {
+        const value = await calls.cliRpc('cli.balances', { provider: meta.id }, 90000);
+        return value?.accounts ?? [];
+      }
+      // reader === 'channel'：Qoder CN CLI 与 channel-pack 的 qodercn 池是同一账号，
+      // 额度读池；但先核对本机 CLI 的登录名，池里换过账号时绝不张冠李戴。
+      const [status, pool] = await Promise.all([
+        calls.cliRpc('cli.balances', { provider: meta.id }, 30000).catch(() => null),
+        calls.rpc(
+          'credits.balances',
+          { provider: meta.cli, ...(force ? { force: true } : {}) },
+          90000,
+        ),
+      ]);
+      const rows = pool?.accounts ?? [];
+      const cliAccount = status?.accounts?.[0];
+      if (cliAccount === undefined) return rows;
+      if (typeof cliAccount.error === 'string' && cliAccount.error !== '') return [cliAccount];
+      const digits = value => String(value ?? '').replace(/\D/g, '');
+      const poolName = rows[0]?.nickname;
+      if (rows.length === 0) {
+        return [{
+          accountId: cliAccount.accountId,
+          nickname: cliAccount.nickname,
+          balance: null,
+          error: '渠道池里没有该 Qoder CN 账号，额度请到 Qoder 客户端查看',
+        }];
+      }
+      if (digits(poolName) === '' || digits(poolName) !== digits(cliAccount.nickname)) {
+        return [{
+          accountId: cliAccount.accountId,
+          nickname: cliAccount.nickname,
+          balance: null,
+          error: `本机 Qoder CN CLI 登录账号（${cliAccount.nickname}）与渠道池账号（${poolName ?? '无'}）不一致，额度请到 Qoder 客户端查看`,
+        }];
+      }
+      return rows;
+    }
+
+    /**
+     * RPC 通道。与 `vendor/dsh-our-free-model/client.js:4036-4078` 完全同构：
+     * `connection` 是机会式读取，拿不到时 available=false，调用抛错，
+     * 由调用方降级而不是让插槽崩掉。
+     *
+     * `endpoint` 是宿主注册的名字：channel-pack 的账号/余额走 `channel-pack`，
+     * CLI 反代读数走本插件宿主半体注册的 `cli-credits`。
+     */
+    function useChannelRpc(ctx, endpoint = 'channel-pack') {
       const ctxRef = useRef(ctx);
       ctxRef.current = ctx;
       const readTransport = useCallback(() => {
@@ -337,7 +453,7 @@ window.__ModuleLoader__.load({
             const result = await latest.call.call(
               latest.connection.rpc,
               '/api',
-              'channel-pack',
+              endpoint,
               { method, payload },
               controller.signal,
             );
@@ -350,7 +466,7 @@ window.__ModuleLoader__.load({
             clearTimeout(timer);
           }
         },
-        [readTransport],
+        [endpoint, readTransport],
       );
 
       return { available: transport !== null, rpc };
@@ -431,7 +547,7 @@ window.__ModuleLoader__.load({
     /* ────────────────────────── 面板 ────────────────────────── */
 
     function Panel(props) {
-      const { t, rpc, channel, rect, onPickChannel, onClose } = props;
+      const { t, rpc, cliRpc, channel, rect, onPickChannel, onClose } = props;
       const [accounts, setAccounts] = useState(null);
       const [balances, setBalances] = useState(null);
       const [loading, setLoading] = useState(false);
@@ -442,12 +558,39 @@ window.__ModuleLoader__.load({
       const panelRef = useRef(null);
 
       const meta = CHANNEL_BY_ID.get(channel);
+      /** CLI 反代渠道（读平台额度，账号不可切 → 面板只读）。 */
+      const cliKey = meta?.cli;
 
       const load = useCallback(
         async force => {
           const gen = ++generation.current;
           setLoading(true);
           const failures = [];
+          if (cliKey !== undefined) {
+            try {
+              const rows = await readCliRows(meta, { rpc, cliRpc }, force);
+              if (gen === generation.current) {
+                setAccounts(
+                  rows.map(row => ({
+                    id: row.accountId,
+                    nickname: row.nickname,
+                    enabled: true,
+                  })),
+                );
+                setBalances(rows);
+              }
+            } catch (cause) {
+              if (gen === generation.current) {
+                setAccounts([]);
+                setBalances([]);
+              }
+              failures.push(String(cause?.message ?? cause));
+            }
+            if (gen !== generation.current) return;
+            setError(failures.length > 0 ? failures[0] : '');
+            setLoading(false);
+            return;
+          }
           try {
             const list = await rpc('account.list', { provider: channel }, 30000);
             if (gen === generation.current) setAccounts(list?.accounts ?? []);
@@ -470,7 +613,7 @@ window.__ModuleLoader__.load({
           setError(failures.length > 0 ? failures[0] : '');
           setLoading(false);
         },
-        [channel, rpc],
+        [channel, rpc, cliRpc, cliKey, meta],
       );
 
       // 打开时立刻抓一次；此后每分钟抓一次（只在面板打开期间，绝不按账号数放大上游读）。
@@ -481,23 +624,41 @@ window.__ModuleLoader__.load({
       }, [load]);
 
       // 渠道清单：provider.status 一次问完全部渠道，挑出「确实有账号」的给用户切。
+      // 🔴 2026-10-24 老总令：OFM 里「已关闭」（closed = 该供应商全部模型被关）
+      //   的平台不再显示——胶囊芯片条放不下十来个渠道，关闭的占位只会让
+      //   在用的平台滑都滑不到，索性从源头去掉。
       useEffect(() => {
         let cancelled = false;
         void (async () => {
+          let base = [channel];
           try {
             const value = await rpc('provider.status', { providers: CHANNEL_IDS }, 20000);
-            if (cancelled) return;
             const statuses = value?.statuses ?? {};
-            const alive = CHANNEL_IDS.filter(id => (statuses[id]?.accounts?.total ?? 0) > 0);
-            setChannels(alive.length > 0 ? alive : [channel]);
+            const alive = CHANNEL_IDS.filter(
+              id =>
+                (statuses[id]?.accounts?.total ?? 0) > 0 &&
+                statuses[id]?.closed !== true,
+            );
+            if (alive.length > 0) base = alive;
           } catch {
-            if (!cancelled) setChannels([channel]);
+            /* provider.status 不可用就只留当前渠道 */
           }
+          // CLI 反代只在宿主确实注册了对应 provider 时出现：没装反代插件的玩家
+          // 不该看到三条永远读不到额度的空芯片。
+          let cli = [];
+          try {
+            const value = await cliRpc('cli.channels', {}, 20000);
+            const providers = Array.isArray(value?.providers) ? value.providers : [];
+            cli = CLI_CHANNEL_IDS.filter(id => providers.includes(id));
+          } catch {
+            cli = [];
+          }
+          if (!cancelled) setChannels([...new Set([...base, ...cli])]);
         })();
         return () => {
           cancelled = true;
         };
-      }, [rpc, channel]);
+      }, [rpc, cliRpc, channel]);
 
       // Esc 收起 + 点击面板外收起（胶囊按钮自己的点击不算「外面」）。
       useEffect(() => {
@@ -601,7 +762,19 @@ window.__ModuleLoader__.load({
         channels !== null && channels.length > 1
           ? h(
               'div',
-              { className: `${P}chips` },
+              {
+                className: `${P}chips`,
+                // 🔴 2026-10-24 老总：芯片条超出 306px 的面板后「左右滑动不了」——
+                //   真因是 PC 端鼠标滚轮只滚垂直方向，水平方向（overflow-x:auto）
+                //   永远不动，尾部渠道被裁掉就再也够不着。这里把滚轮的垂直增量
+                //   换算成 scrollLeft 横滚；触屏端本身可横滑，不受影响。
+                onWheel: event => {
+                  if (event.deltaY === 0) return;
+                  event.preventDefault();
+                  const node = event.currentTarget;
+                  node.scrollLeft += event.deltaY;
+                },
+              },
               channels.map(id =>
                 h(
                   'button',
@@ -618,7 +791,7 @@ window.__ModuleLoader__.load({
             )
           : null,
         rows.length === 0
-          ? h('div', { className: `${P}empty` }, t('panel.empty'))
+          ? h('div', { className: `${P}empty` }, t(cliKey !== undefined ? 'panel.emptyCli' : 'panel.empty'))
           : h(
               'div',
               { className: `${P}list` },
@@ -631,12 +804,13 @@ window.__ModuleLoader__.load({
                   {
                     key: account.id,
                     className: `${P}row`,
-                    'data-current': index === 0 ? 'true' : 'false',
+                    'data-current': index === 0 && cliKey === undefined ? 'true' : 'false',
                     'data-disabled': disabled ? 'true' : 'false',
+                    'data-readonly': cliKey !== undefined ? 'true' : 'false',
                     'data-busy': busyId === account.id ? 'true' : 'false',
                     title: typeof failure === 'string' ? failure : undefined,
                     onClick: () => {
-                      if (!disabled) void switchTo(account.id);
+                      if (!disabled && cliKey === undefined) void switchTo(account.id);
                     },
                   },
                   h(
@@ -644,9 +818,14 @@ window.__ModuleLoader__.load({
                     { className: `${P}nick` },
                     account.nickname ?? account.accountName ?? account.id,
                   ),
-                  index === 0 ? h('span', { className: `${P}badge` }, t('panel.priority')) : null,
+                  index === 0 && cliKey === undefined
+                    ? h('span', { className: `${P}badge` }, t('panel.priority'))
+                    : null,
                   disabled
                     ? h('span', { className: `${P}badge`, 'data-kind': 'off' }, t('panel.disabled'))
+                    : null,
+                  cliKey !== undefined
+                    ? h('span', { className: `${P}badge`, 'data-kind': 'off' }, t('panel.cliBadge'))
                     : null,
                   h(
                     'span',
@@ -661,7 +840,7 @@ window.__ModuleLoader__.load({
           { className: `${P}foot` },
           error !== ''
             ? h('div', { className: `${P}err` }, t('panel.failed', { reason: error }))
-            : t('panel.hint'),
+            : t(cliKey !== undefined ? 'panel.hintCli' : 'panel.hint'),
           rows.length > 0 ? h('div', null, t('panel.accounts', { count: String(rows.length) })) : null,
         ),
       );
@@ -674,6 +853,7 @@ window.__ModuleLoader__.load({
       const projection = useProjection === undefined ? undefined : useProjection('modelSelection');
       const provider = selectedProviderOf(projection);
       const { available, rpc } = useChannelRpc(hostCtx);
+      const { rpc: cliRpc } = useChannelRpc(hostCtx, 'cli-credits');
 
       const [channel, setChannel] = useState(() => readStoredChannel());
       const [snapshot, setSnapshot] = useState(null);
@@ -731,13 +911,18 @@ window.__ModuleLoader__.load({
           const gen = ++generation.current;
           setReading(true);
           try {
-            const value = await rpc(
-              'usage.badge',
-              { provider: channel, ...(force ? { force: true } : {}) },
-              90000,
-            );
+            const meta = CHANNEL_BY_ID.get(channel);
+            const rows =
+              meta?.cli !== undefined
+                ? await readCliRows(meta, { rpc, cliRpc }, force)
+                : (
+                    await rpc(
+                      'usage.badge',
+                      { provider: channel, ...(force ? { force: true } : {}) },
+                      90000,
+                    )
+                  )?.accounts ?? [];
             if (gen !== generation.current) return;
-            const rows = value?.accounts ?? [];
             const known = rows.some(row => Number.isFinite(row.balance?.total));
             setSnapshot({
               total: rows.reduce(
@@ -761,7 +946,7 @@ window.__ModuleLoader__.load({
             if (gen === generation.current) setReading(false);
           }
         },
-        [channel, available, rpc],
+        [channel, available, rpc, cliRpc],
       );
 
       useEffect(() => {
@@ -835,6 +1020,7 @@ window.__ModuleLoader__.load({
               h(Panel, {
                 t,
                 rpc,
+                cliRpc,
                 channel,
                 rect,
                 onPickChannel,
