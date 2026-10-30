@@ -147,6 +147,20 @@ CLI 反代通道走本插件宿主半体注册的另一个端点 `/api/cli-credi
 
 ## 变更记录
 
+### v1.5.1 — 2026-10-30
+
+- **修复 iOS App 上面板「手指滑不动」（列表滚不动 / 芯片条滑不动）**。
+  - `.dcc-list` 显式 `min-height:0` + `flex:1 1 auto`：WebKit 对 column flex 里的滚动项
+    处理与 Chrome 不一致，内容超出时列表拿不到可滚动视口；
+  - 补 `-webkit-overflow-scrolling: touch` / `overscroll-behavior: contain` / `touch-action: pan-y`；
+  - 面板根节点在 `touchstart / touchmove / touchend` 就地 `stopPropagation`：iOS App 宿主在
+    `document` 上挂了全局边缘手势（边缘 32px 起手、方向锁定为横向即 `preventDefault`），
+    会连带吞掉面板内的滑动；截停后宿主收不到手势，列表纵滚与芯片横滑都交回浏览器原生处理；
+  - 面板内禁用 `user-select` / `-webkit-touch-callout`，长按不再弹系统菜单打断滑动。
+- 验证：Playwright WebKit（430×932 触屏视口）实测 —— 造 30 行后 `clientHeight 466 /
+  scrollHeight 1000`、`scrollTop` 可写；触摸冒泡逐层计数 `row / list / panel / body` 命中、
+  `document` 为 0。
+
 ### v1.5.0 — 2026-10-30
 
 - **新增 CLI 反代三通道读数**：胶囊芯片条按已安装的反代插件自动出现 `ZCode CLI` / `Qoder CN CLI` / `WB CLI`，只读展示平台额度。

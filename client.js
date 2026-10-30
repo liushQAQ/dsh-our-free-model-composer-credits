@@ -223,6 +223,8 @@ window.__ModuleLoader__.load({
   background: var(--dsw-alias-bg-overlay); color: var(--dsw-alias-label-primary);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
   font: inherit; font-size: 12px; overflow: hidden;
+  /* iOS：长按列表不会弹文字选择/系统菜单打断滑动 */
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
 .${P}head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--dsw-alias-border-l1); }
 .${P}title { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -242,7 +244,18 @@ window.__ModuleLoader__.load({
 }
 .${P}chip:hover { color: var(--dsw-alias-label-primary); }
 .${P}chip[data-active="true"] { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
-.${P}list { flex: 1; overflow: auto; padding: 4px 0; }
+/* 🔴 2026-10-30 iOS 真机：胶囊面板「手指滑不动」。
+   双层真因：
+   ① 列表是 column flex 里的滚动项，WebKit 对 min-height:auto 的收缩处理
+      与 Chrome 不一致 —— 内容超出时列表拿不到可滚动视口，必须显式 min-height:0；
+   ② iOS App 宿主在 document 上挂了全局边缘手势（边缘 32px 起手的横向判定会
+      preventDefault），从面板左侧起手略斜就被判成横向 → 整个手势被吞。
+       JS 侧在面板根节点 stopPropagation（TouchGuard），CSS 侧再用 touch-action
+       / overscroll 把纵向滚动交给浏览器，双保险。 */
+.${P}list {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 0;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y;
+}
 .${P}row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; }
 .${P}row:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .${P}row[data-current="true"] { background: var(--dsw-alias-bg-layer-2); }
@@ -742,6 +755,11 @@ window.__ModuleLoader__.load({
           style,
           role: 'dialog',
           'aria-label': t('panel.title', { channel: meta?.name ?? channel }),
+          // iOS App 宿主的边缘手势挂在 document 冒泡段，判定横向就 preventDefault；
+          // 面板内（列表纵向滚 / 芯片横滑）触摸一律就地截停，宿主收不到就不会吞手势。
+          onTouchStart: event => event.stopPropagation(),
+          onTouchMove: event => event.stopPropagation(),
+          onTouchEnd: event => event.stopPropagation(),
         },
         h(
           'div',

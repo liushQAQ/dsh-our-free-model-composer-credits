@@ -1,6 +1,6 @@
 {
   "name": "dsh-our-free-model-composer-credits",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "会话 tab 栏（对话/轨迹/系统监控 右侧）积分胶囊 · 余额读数 + 一键切号 + CLI 反代平台额度（ZCode/Qoder CN/WorkBuddy）",
   "keywords": [
     "deepseek-harness",
