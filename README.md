@@ -147,6 +147,22 @@ CLI 反代通道走本插件宿主半体注册的另一个端点 `/api/cli-credi
 
 ## 变更记录
 
+### v1.5.2 — 2026-10-30
+
+- **修复 iOS App 面板仍然「手指滑不动」（v1.5.1 未击中真因）**。
+  - 真因在 iOS App 宿主：它把所有 `[role="dialog"]` 当成系统弹层——CSS 强制
+    `overflow-y:auto !important` + `-webkit-overflow-scrolling:touch !important`，
+    布局看门狗 `adjustElement` 还会写内联 `overflowY` / `webkitOverflowScrolling`。
+    面板被改成外层惯性滚动容器后，iOS 上嵌套 momentum 滚动层会让内层 `.dcc-list`
+    拿不到手势：面板能点、能开，就是滑不动。
+  - 反制：面板自身锁定为不可滚的定高容器（`overflow:hidden` / `-webkit-overflow-scrolling:auto`
+    / `max-height:62vh` / 原 `z-index` 全部 `!important`，选择器 `.dcc-panel.dcc-panel.dcc-panel`
+    特异性 (0,3,0)，压过 App 的 `[role="dialog"]` 与 `[role="dialog"]:not(...)` 同权规则及内联样式），
+    滚动只发生在 `.dcc-list`；`head / chips / foot` 固定 `flex:none`，不再被压缩。
+  - 验证：注入 App 同款 CSS 规则 + `adjustElement` 内联写入后实测 —— 计算样式
+    `overflowY=hidden`、面板 409px（62vh）、列表 `clientHeight 304 / scrollHeight 938`、
+    触摸滑动 `scrollTop 153`、芯片条 `scrollLeft 159`。
+
 ### v1.5.1 — 2026-10-30
 
 - **修复 iOS App 上面板「手指滑不动」（列表滚不动 / 芯片条滑不动）**。

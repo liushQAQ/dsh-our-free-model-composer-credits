@@ -245,13 +245,22 @@ window.__ModuleLoader__.load({
 .${P}chip:hover { color: var(--dsw-alias-label-primary); }
 .${P}chip[data-active="true"] { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
 /* 🔴 2026-10-30 iOS 真机：胶囊面板「手指滑不动」。
-   双层真因：
-   ① 列表是 column flex 里的滚动项，WebKit 对 min-height:auto 的收缩处理
-      与 Chrome 不一致 —— 内容超出时列表拿不到可滚动视口，必须显式 min-height:0；
-   ② iOS App 宿主在 document 上挂了全局边缘手势（边缘 32px 起手的横向判定会
-      preventDefault），从面板左侧起手略斜就被判成横向 → 整个手势被吞。
-       JS 侧在面板根节点 stopPropagation（TouchGuard），CSS 侧再用 touch-action
-       / overscroll 把纵向滚动交给浏览器，双保险。 */
+   真因（App 侧实锤）：iOS App 的全局浮层规则与布局看门狗都会把 `[role="dialog"]`
+   改成外层滚动容器 —— CSS 给 `overflow-y:auto !important` +
+   `-webkit-overflow-scrolling:touch !important`，看门狗 adjustElement 还写内联
+   `overflowY/style.webkitOverflowScrolling='touch'`。iOS 上嵌套 momentum 滚动层
+   会让内层 `.dcc-list` 拿不到手势，整块面板看着能点、手指却滑不动。
+   反制：面板自身必须是不可滚的定高容器，滚动只发生在 `.dcc-list`；
+   三类选择器 (0,3,0) + !important 压过 App 的所有属性选择器（含
+   `[role="dialog"]:not(.ZiQlkq_panel)` 这种 (0,2,0) 同权规则）与内联非 important 样式。 */
+.${P}panel.${P}panel.${P}panel {
+  overflow: hidden !important;
+  -webkit-overflow-scrolling: auto !important;
+  overscroll-behavior: auto !important;
+  max-height: 62vh !important;
+  z-index: 2147483000 !important;
+}
+.${P}head, .${P}chips, .${P}foot { flex: none; }
 .${P}list {
   flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 0;
   -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y;
