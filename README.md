@@ -64,7 +64,8 @@ pnpm add github:liushQAQ/dsh-our-free-model-composer-credits
 - **渠道可切换**：面板顶部列出所有还有账号的渠道，点击即切；选择记在 `localStorage`，跨会话保留。
 - **不伪造数字**：读不到余额的行显示 `—`，**绝不显示 0**。
 - **模型名带平台前缀**：宿主半体在模型目录的读取出口（`llm.listModels` / `llm.resolveModelInfo`）给上述 12 个渠道的模型名加上平台前缀，同名模型一眼可辨。只改 `name` 这一个显示字段，`id` / 路由 / 上下文元数据都不动；不属于渠道包的 provider 原样透传。
-- **CLI 反代通道读数**：装了 `dsh-zcode-cli-proxy` / `dsh-qodercn-cli-proxy` / `dsh-wb-cli-proxy` 任一插件时，芯片条自动多出对应平台，只读展示平台额度（账号不可切）。没装的反代不会出现空条目。
+- **CLI 反代通道读数**：装了 `dsh-zcode-cli-proxy` / `dsh-qodercn-cli-proxy` / `dsh-wb-cli-proxy` 任一插件时，芯片条自动多出对应平台，展示平台额度。没装的反代不会出现空条目。
+- **CLI 账户切换（wb-cli）**：WorkBuddy CLI 的 vault 里同时躺着多个账号时，面板里**点行即切**——第一行恒为「下一回合真正会被使用、正在计费的账号」，标 `当前`。切换只写一个状态文件（见下），不改 vault 里任何凭据。
 
 ### 支持的渠道（12 个）
 
@@ -78,11 +79,29 @@ pnpm add github:liushQAQ/dsh-our-free-model-composer-credits
 | --- | --- | --- |
 | `ZCode CLI` | `zcode-cli` | 本机 `~/.zcode/v2/credentials.json` → ZCode Start Plan `billing/balance`（token 口径） |
 | `Qoder CN CLI` | `qodercn-cli` | 本机 CLI 登录名与 channel-pack `qodercn` 池核对一致后，复用池余额；不一致只报登录名 |
-| `WB CLI` | `wb-cli` | `dsh-connect-workbuddy` 的只读积分端点（与 CLI 同一份 vault） |
+| `WB CLI` | `wb-cli` | `$DSH_HOME/workbuddy-vault/cn/*.json` → CodeBuddy 计费 `get-user-resource`（ProductCode `p_tcaca`），逐账号一行 |
 
 - ZCode CLI 的凭证只在本机磁盘上，**不会**上传到本插件或第三方；解密后仅用于向 `zcode.z.ai` 查询自己的额度。
 - Qoder CN CLI 的令牌加密且没有额度查询接口，所以只能读登录名；额度按同账号复用渠道池读数。
-- 三条通道都是**只读**：面板里账号行不可点击切换，没有签到 / 领取动作。
+- ZCode CLI / Qoder CN CLI 两条仍为**只读**：账号行不可点击切换，没有签到 / 领取动作。
+
+### CLI 账户切换（`wb-cli`，2026-11-03 新增）
+
+`wb-cli` 反代的 vault 里通常不止一个 WorkBuddy 账号（换号登录后旧的不会被删），而反代**每回合只按顺序挑第一个能用的**——顺序原来是 `auth.expiresAt` 降序，跟"哪个账号还有额度"无关，于是经常拿一个余额为 0 的号去请求，直接吃回「积分不够」。
+
+现在面板里可以像切渠道池账号一样点行切换：
+
+| 项 | 说明 |
+| --- | --- |
+| 状态文件 | `$DSH_HOME/cli-active-accounts.json`（`{ "wb-cli": { accountId, nickname, at } }`） |
+| 写入方 | 面板点行 → `cli.switchAccount` RPC（宿主半体） |
+| 读取方 | `dsh-wb-cli-proxy` 每回合读 vault 时按它把该账号排第一（只改顺序，**不动**任何凭据文件） |
+| 生效时机 | 下一回合立即生效，不需要重启 DSH |
+| 面板顺序 | 与反代逐条对齐：第 1 行 = 这一轮真正会被使用的账号，标 `当前` |
+| 回滚 | 删掉这个状态文件即回到 `expiresAt` 自然排序 |
+
+> 余额口径注意：计费接口 `get-user-resource` 的"可用额度"与签到活动里的"总积分"是两套口径。实测同一个号可能签到页显示 3500 分、资源包余量却是 0 —— 选账号请以面板里这一列（资源包余量）为准。
+
 
 ## 依赖
 

@@ -104,10 +104,12 @@ window.__ModuleLoader__.load({
      * 胶囊经 `channelOfProvider` 直接锁定到对应平台读数。
      *
      * `reader` 决定读数来源：
-     * - `wb`：dsh-connect-workbuddy 的只读积分端点（与 wb-cli 读同一份 vault）。
-     * - `cli`：本插件宿主半体的 `/api/cli-credits` —— zcode-cli 的凭证只在本机
-     *   `~/.zcode` 里，而 channel-pack 池里的 `zcode` 是**另一个账号**，混用会
-     *   显示别人的额度。
+     * - `cli`：本插件宿主半体的 `/api/cli-credits` —— wb-cli/zcode-cli 的凭证只在
+     *   本机（wb-cli 读 `$DSH_HOME/workbuddy-vault`，zcode-cli 读 `~/.zcode`），
+     *   而 channel-pack 池里的同名渠道是**另一批账号**，混用会显示别人的额度。
+     *   wb-cli 原走 dsh-connect-workbuddy 的只读积分端点（reader `wb`），该插件
+     *   2026-11-03 前已卸载且恢复加载会挂起内核，读数已收编进宿主半体（同 vault、
+     *   同计费接口口径），改走 `cli`。
      * - `channel`：qodercn-cli 的本机登录账号与 channel-pack 的 `qodercn` 池是
      *   同一账号，直接复用 `credits.balances`；读数前先核对登录名，不一致就
      *   报错而不是把池里那个账号的额度冒充给它。
@@ -115,7 +117,10 @@ window.__ModuleLoader__.load({
     const CLI_CHANNELS = [
       { id: 'zcode-cli', name: 'ZCode CLI', short: 'ZCode CLI', unit: 'tokens', cli: 'zcode', reader: 'cli' },
       { id: 'qodercn-cli', name: 'Qoder CN CLI', short: 'Qoder CN CLI', unit: 'left', cli: 'qodercn', reader: 'channel' },
-      { id: 'wb-cli', name: 'WorkBuddy CLI', short: 'WB CLI', unit: 'left', cli: 'workbuddy', reader: 'wb' },
+      // 2026-11-03 老总令：胶囊下面加「CLI 账户切换」。wb-cli 的 vault 里会同时躺着
+      // 多个 WorkBuddy 账号，反代每回合按顺序挑第一个能用的 —— 面板里点行即把该账号
+      // 排到首位（写 $DSH_HOME/cli-active-accounts.json），下一回合立刻按新账号计费。
+      { id: 'wb-cli', name: 'WorkBuddy CLI', short: 'WB CLI', unit: 'left', cli: 'workbuddy', reader: 'cli', switchable: true },
     ];
     const CLI_CHANNEL_IDS = CLI_CHANNELS.map(channel => channel.id);
     const CHANNEL_BY_ID = new Map(
@@ -146,6 +151,8 @@ window.__ModuleLoader__.load({
         'panel.emptyCli': '未读到 CLI 反代凭据：请先在对应 CLI 登录，再点刷新。',
         'panel.hint': '点一行即把该账号排到最前（秒切优先账号）。',
         'panel.hintCli': 'CLI 反代通道：只读展示平台额度，刷新即同步。',
+        'panel.hintCliSwitchable': '点一行即切换到该 CLI 账号，下一轮对话按新账号计费。',
+        'panel.current': '当前',
         'panel.cliBadge': 'CLI',
         'panel.failed': '操作失败：{reason}',
         'panel.accounts': '{count} 个账号',
@@ -166,6 +173,8 @@ window.__ModuleLoader__.load({
         'panel.emptyCli': 'No CLI credential found — log in with the CLI first, then refresh.',
         'panel.hint': 'Click a row to move that account to the front.',
         'panel.hintCli': 'CLI relay channel: read-only platform quota, refreshed in place.',
+        'panel.hintCliSwitchable': 'Click a row to switch the CLI account — the next turn bills that account.',
+        'panel.current': 'Active',
         'panel.cliBadge': 'CLI',
         'panel.failed': 'Failed: {reason}',
         'panel.accounts': '{count} accounts',
@@ -245,14 +254,12 @@ window.__ModuleLoader__.load({
 .${P}chip:hover { color: var(--dsw-alias-label-primary); }
 .${P}chip[data-active="true"] { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
 /* 🔴 2026-10-30 iOS 真机：胶囊面板「手指滑不动」。
-   真因（App 侧实锤）：iOS App 的全局浮层规则与布局看门狗都会把 `[role="dialog"]`
-   改成外层滚动容器 —— CSS 给 `overflow-y:auto !important` +
-   `-webkit-overflow-scrolling:touch !important`，看门狗 adjustElement 还写内联
-   `overflowY/style.webkitOverflowScrolling='touch'`。iOS 上嵌套 momentum 滚动层
-   会让内层 `.dcc-list` 拿不到手势，整块面板看着能点、手指却滑不动。
-   反制：面板自身必须是不可滚的定高容器，滚动只发生在 `.dcc-list`；
-   三类选择器 (0,3,0) + !important 压过 App 的所有属性选择器（含
-   `[role="dialog"]:not(.ZiQlkq_panel)` 这种 (0,2,0) 同权规则）与内联非 important 样式。 */
+   真因：iOS App 的注入层会把 [role="dialog"] 元素强制改成外层惯性滚动容器
+   （CSS overflow-y:auto + overflow-scrolling:touch，看门狗 adjustElement 还写内联），
+   内层 .dcc-list 因此在 WebKit 上拿不到手势。反制分两层：
+   ① 面板改用 role=group，彻底不再命中 App 的 dialog 名单（CSS + 看门狗都失效）；
+   ② 面板自身锁定为不可滚的定高容器，滚动只发生在 .dcc-list；
+      再叠一层 bindDragScroll 触摸兜底，原生滚动被宿主吞掉时仍能手动滑。 */
 .${P}panel.${P}panel.${P}panel {
   overflow: hidden !important;
   -webkit-overflow-scrolling: auto !important;
@@ -261,6 +268,7 @@ window.__ModuleLoader__.load({
   z-index: 2147483000 !important;
 }
 .${P}head, .${P}chips, .${P}foot { flex: none; }
+.${P}chips { touch-action: pan-x; }
 .${P}list {
   flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 0;
   -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y;
@@ -285,6 +293,69 @@ window.__ModuleLoader__.load({
 `;
 
     /* ────────────────────────── 小工具 ────────────────────────── */
+
+    /* iOS App 的注入层会拦下浮层里的触摸手势（边缘滑动 / 浮层滚动容器改写），
+       原生滚动被吞掉时手指就「滑不动」。这里退化成手搓滚动：只有确认原生滚动
+       没跟上（位移 > 6px 而 scrollTop 纹丝不动）才接管，原生正常时零副作用。 */
+    let lastDragAt = 0;
+    function bindDragScroll(node, axis) {
+      if (!node || node.dataset.dccDrag === '1') return;
+      node.dataset.dccDrag = '1';
+      let start = 0;
+      let startScroll = 0;
+      let dragging = false;
+      let engaged = false;
+      let moved = false;
+      const read = () => (axis === 'y' ? node.scrollTop : node.scrollLeft);
+      const write = value => {
+        if (axis === 'y') node.scrollTop = value;
+        else node.scrollLeft = value;
+      };
+      const posOf = touch => (axis === 'y' ? touch.clientY : touch.clientX);
+      node.addEventListener(
+        'touchstart',
+        event => {
+          if (event.touches.length !== 1) {
+            dragging = false;
+            return;
+          }
+          dragging = true;
+          engaged = false;
+          moved = false;
+          start = posOf(event.touches[0]);
+          startScroll = read();
+        },
+        { passive: true },
+      );
+      node.addEventListener(
+        'touchmove',
+        event => {
+          if (!dragging || event.touches.length !== 1) return;
+          const delta = start - posOf(event.touches[0]);
+          if (!engaged) {
+            if (Math.abs(delta) < 6) return;
+            moved = true;
+            if (Math.abs(read() - startScroll) > 1) {
+              dragging = false;
+              return;
+            }
+            engaged = true;
+          }
+          event.preventDefault();
+          write(startScroll + delta);
+        },
+        { passive: false },
+      );
+      node.addEventListener(
+        'touchend',
+        () => {
+          if (moved) lastDragAt = Date.now();
+          dragging = false;
+          engaged = false;
+        },
+        { passive: true },
+      );
+    }
 
     function selectedProviderOf(projection) {
       const provider = (projection?.next ?? projection?.lastUsed)?.provider;
@@ -337,9 +408,6 @@ window.__ModuleLoader__.load({
       return kilo(total);
     }
 
-    /** WorkBuddy 只读积分端点（dsh-connect-workbuddy 注册在宿主 webServer，同源）。 */
-    const WB_CREDITS_URL = '/plugins/dsh-connect-workbuddy/account-credits?region=cn';
-
     /**
      * CLI 反代渠道读数：统一成 channel-pack 的账号行形状
      * `{ accountId, nickname, balance, error? }`，面板与胶囊共用同一套渲染。
@@ -352,24 +420,6 @@ window.__ModuleLoader__.load({
      * @param force - 面板「刷新」：让支持缓存的渠道重抓。
      */
     async function readCliRows(meta, calls, force) {
-      if (meta.reader === 'wb') {
-        const response = await fetch(WB_CREDITS_URL, {
-          cache: 'no-store',
-          credentials: 'same-origin',
-        });
-        if (!response.ok) throw new Error(`WorkBuddy 积分端点 HTTP ${response.status}`);
-        const value = await response.json();
-        return (value?.accounts ?? []).map(account => {
-          const credits = account?.credits;
-          const known = Number.isFinite(credits);
-          return {
-            accountId: account?.id ?? 'unknown',
-            nickname: account?.accountName ?? account?.id ?? 'WorkBuddy',
-            balance: known ? { total: credits } : null,
-            ...(known ? {} : { error: '额度读取失败（账号未登录或凭据已过期）' }),
-          };
-        });
-      }
       if (meta.reader === 'cli') {
         const value = await calls.cliRpc('cli.balances', { provider: meta.id }, 90000);
         return value?.accounts ?? [];
@@ -580,8 +630,10 @@ window.__ModuleLoader__.load({
       const panelRef = useRef(null);
 
       const meta = CHANNEL_BY_ID.get(channel);
-      /** CLI 反代渠道（读平台额度，账号不可切 → 面板只读）。 */
+      /** CLI 反代渠道（读平台额度）。 */
       const cliKey = meta?.cli;
+      /** 该 CLI 通道是否支持在面板里切号（目前只有 wb-cli 的 vault 里有多个账号）。 */
+      const cliSwitchable = cliKey !== undefined && meta?.switchable === true;
 
       const load = useCallback(
         async force => {
@@ -597,6 +649,8 @@ window.__ModuleLoader__.load({
                     id: row.accountId,
                     nickname: row.nickname,
                     enabled: true,
+                    // 后端按「反代这一轮会用的账号」标 active，面板据此显示「当前」并排首位。
+                    active: row.active === true,
                   })),
                 );
                 setBalances(rows);
@@ -713,6 +767,26 @@ window.__ModuleLoader__.load({
       const switchTo = useCallback(
         async accountId => {
           if (busyId !== null) return;
+          // ── CLI 通道切号：只写「当前账号」状态文件，反代下一回合读它并把该账号排首位。
+          //    与 channel-pack 的 account.reorder 是两套体系（那套改账号池顺序，这套不动
+          //    vault 里的任何凭据，随时删状态文件即可回滚到 expiresAt 自然排序）。
+          if (cliSwitchable) {
+            const rows = accounts ?? [];
+            const target = rows.find(row => row.id === accountId);
+            if (rows.length === 0 || target === undefined || target.active === true) return;
+            setBusyId(accountId);
+            setError('');
+            try {
+              await cliRpc('cli.switchAccount', { provider: channel, accountId }, 30000);
+              await load(true);
+            } catch (cause) {
+              setError(String(cause?.message ?? cause));
+              await load(false);
+            } finally {
+              setBusyId(null);
+            }
+            return;
+          }
           const ids = (accounts ?? []).map(account => account.id);
           if (ids.length === 0 || ids[0] === accountId) return;
           const ordered = [accountId, ...ids.filter(id => id !== accountId)];
@@ -734,7 +808,7 @@ window.__ModuleLoader__.load({
             setBusyId(null);
           }
         },
-        [accounts, busyId, channel, rpc, load],
+        [accounts, busyId, channel, rpc, cliRpc, cliSwitchable, load],
       );
 
       const width = 306;
@@ -762,7 +836,7 @@ window.__ModuleLoader__.load({
           ref: panelRef,
           className: `${P}panel`,
           style,
-          role: 'dialog',
+          role: 'group',
           'aria-label': t('panel.title', { channel: meta?.name ?? channel }),
           // iOS App 宿主的边缘手势挂在 document 冒泡段，判定横向就 preventDefault；
           // 面板内（列表纵向滚 / 芯片横滑）触摸一律就地截停，宿主收不到就不会吞手势。
@@ -791,6 +865,7 @@ window.__ModuleLoader__.load({
               'div',
               {
                 className: `${P}chips`,
+                ref: node => bindDragScroll(node, 'x'),
                 // 🔴 2026-10-24 老总：芯片条超出 306px 的面板后「左右滑动不了」——
                 //   真因是 PC 端鼠标滚轮只滚垂直方向，水平方向（overflow-x:auto）
                 //   永远不动，尾部渠道被裁掉就再也够不着。这里把滚轮的垂直增量
@@ -821,23 +896,27 @@ window.__ModuleLoader__.load({
           ? h('div', { className: `${P}empty` }, t(cliKey !== undefined ? 'panel.emptyCli' : 'panel.empty'))
           : h(
               'div',
-              { className: `${P}list` },
+              { className: `${P}list`, ref: node => bindDragScroll(node, 'y') },
               rows.map((account, index) => {
                 const text = balanceText(balanceOf(account.id), unit);
                 const failure = errorOf(account.id);
                 const disabled = account.enabled === false;
+                // CLI 行：后端按「反代这一轮真正会用的账号」标 active；非 CLI 行沿用「第一位即优先」。
+                const isCurrent = cliKey !== undefined ? account.active === true : index === 0;
+                const clickable = !disabled && (cliKey === undefined || cliSwitchable);
                 return h(
                   'div',
                   {
                     key: account.id,
                     className: `${P}row`,
-                    'data-current': index === 0 && cliKey === undefined ? 'true' : 'false',
+                    'data-current': isCurrent ? 'true' : 'false',
                     'data-disabled': disabled ? 'true' : 'false',
-                    'data-readonly': cliKey !== undefined ? 'true' : 'false',
+                    'data-readonly': cliKey !== undefined && !cliSwitchable ? 'true' : 'false',
                     'data-busy': busyId === account.id ? 'true' : 'false',
                     title: typeof failure === 'string' ? failure : undefined,
                     onClick: () => {
-                      if (!disabled && cliKey === undefined) void switchTo(account.id);
+                      if (Date.now() - lastDragAt < 350) return;
+                      if (clickable) void switchTo(account.id);
                     },
                   },
                   h(
@@ -845,8 +924,8 @@ window.__ModuleLoader__.load({
                     { className: `${P}nick` },
                     account.nickname ?? account.accountName ?? account.id,
                   ),
-                  index === 0 && cliKey === undefined
-                    ? h('span', { className: `${P}badge` }, t('panel.priority'))
+                  isCurrent
+                    ? h('span', { className: `${P}badge` }, t(cliKey !== undefined ? 'panel.current' : 'panel.priority'))
                     : null,
                   disabled
                     ? h('span', { className: `${P}badge`, 'data-kind': 'off' }, t('panel.disabled'))
@@ -867,7 +946,7 @@ window.__ModuleLoader__.load({
           { className: `${P}foot` },
           error !== ''
             ? h('div', { className: `${P}err` }, t('panel.failed', { reason: error }))
-            : t(cliKey !== undefined ? 'panel.hintCli' : 'panel.hint'),
+            : t(cliKey !== undefined ? (cliSwitchable ? 'panel.hintCliSwitchable' : 'panel.hintCli') : 'panel.hint'),
           rows.length > 0 ? h('div', null, t('panel.accounts', { count: String(rows.length) })) : null,
         ),
       );
@@ -1092,6 +1171,79 @@ window.__ModuleLoader__.load({
             'ofm-composer-credits: styles',
           );
           const t = ctx.locale.bind(NS);
+          // ── 「自己打开就是最新」：模型目录回前台即重拉（2026-11-04 老总令）──
+          // 浏览器端 ModelCatalogDirectory 只在收到 `llm/adapters-updated` 时重拉；
+          // 页面长期开着又恰好漏掉一次事件，下拉就会定格在打开那一刻的旧倍率，
+          // 只能刷新页面——这就是「非要人工叫一次」。这里在窗口重新获得焦点 /
+          // 页面恢复可见时主动 refresh 一次（3s 去抖），打开下拉前必然刚拉过。
+          // 取不到 modelDirectories 服务就静默跳过，绝不影响胶囊本身。
+          //
+          // 2026-11-04 老总令补一手「手动刷新」：**点模型选择器 = 立刻重拉一次**。
+          // 触发点选在 pointerdown 捕获段（菜单还没打开就已发出重拉），键盘 Enter/Space
+          // 同效；只调 `catalog.refresh()`（读宿主适配器清单，纯本地 RPC），
+          // **不跑任何 probe / 不发任何上游请求，零积分消耗**。
+          ctx.effect(
+            () => {
+              if (typeof window === 'undefined' || typeof document === 'undefined') return () => {};
+              let last = 0;
+              const pull = reason => {
+                try {
+                  const directories = typeof ctx.get === 'function' ? ctx.get('modelDirectories') : undefined;
+                  const catalog = directories?.catalog;
+                  if (typeof catalog?.refresh !== 'function') return;
+                  catalog.refresh();
+                  if (reason === 'manual') console.info('[ofm-composer-credits] 已手动重拉模型目录（本地读清单，不扣积分）');
+                } catch (error) {
+                  console.warn('[ofm-composer-credits] 模型目录刷新失败:', String(error?.message ?? error));
+                }
+              };
+              const bump = () => {
+                const now = Date.now();
+                if (now - last < 3000) return;
+                last = now;
+                pull('focus');
+              };
+              // 模型选择器的稳定特征：button[aria-haspopup=menu] + 内含 data-model-id 标签，
+              // 或中英文 aria-label/title 文案命中。类名是构建期哈希，不能用。
+              const isModelTrigger = node => {
+                if (!(node instanceof Element)) return false;
+                const trigger = node.closest('button[aria-haspopup="menu"]');
+                if (trigger === null) return false;
+                if (trigger.querySelector('[data-model-id]') !== null) return true;
+                const text = `${trigger.getAttribute('aria-label') ?? ''} ${trigger.getAttribute('title') ?? ''}`;
+                return /选择模型|请选择模型|select model/i.test(text);
+              };
+              let lastManual = 0;
+              const manual = () => {
+                const now = Date.now();
+                if (now - lastManual < 400) return;
+                lastManual = now;
+                last = now;
+                pull('manual');
+              };
+              const onPointerDown = event => {
+                if (isModelTrigger(event.target)) manual();
+              };
+              const onKeyDown = event => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                if (isModelTrigger(document.activeElement)) manual();
+              };
+              const onVisible = () => {
+                if (!document.hidden) bump();
+              };
+              window.addEventListener('focus', bump);
+              document.addEventListener('visibilitychange', onVisible);
+              document.addEventListener('pointerdown', onPointerDown, true);
+              document.addEventListener('keydown', onKeyDown, true);
+              return () => {
+                window.removeEventListener('focus', bump);
+                document.removeEventListener('visibilitychange', onVisible);
+                document.removeEventListener('pointerdown', onPointerDown, true);
+                document.removeEventListener('keydown', onKeyDown, true);
+              };
+            },
+            'ofm-composer-credits: 模型目录回前台刷新',
+          );
           // 注册是无条件的；组件自己读宿主 modelSelection 投影与 RPC 可用性，
           // 不可用时降级显示，绝不抛错（抛错会清空整个插槽）。
           ctx.slots.inject(SLOT, () =>

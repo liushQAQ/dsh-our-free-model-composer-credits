@@ -17,8 +17,12 @@
  * - Qoder CN：CLI 只把登录态写进 `~/.qoder-cn/.qoder-app-status.json`，令牌加密且
  *   没有额度查询接口 —— 这里**只报登录名**，额度由客户端复用 channel-pack 的
  *   `qodercn` 池读数（同账号），登录名用于一致性核对。
- * - WorkBuddy：客户端走 dsh-connect-workbuddy 的只读积分端点（与 wb-cli 同 vault），
- *   不在本模块重复实现。
+ * - WorkBuddy：直读 wb-cli 同款 vault（`$DSH_HOME/workbuddy-vault/<region>/*.json`，
+ *   明文 accessToken），逐账号问 CodeBuddy 计费接口
+ *   `POST /v2/billing/meter/get-user-resource`（ProductCode p_tcaca）。
+ *   口径与 connect-workbuddy 5.5.1 的 `fetchCredits` 完全同源（2026-11-03 实测：
+ *   🌈QAQAQ风丶 total=346.39 = 拉新权益包 27.39 + 运营裂变包 319）。该插件已卸载
+ *   （恢复加载会挂起内核，见 qclaw-data 备份目录备注），故读数收编进本模块。
  *
  * @module cli-credits
  */
@@ -260,6 +264,202 @@ function collectQoderCn() {
   }
 }
 
+/* ────────────────────────── WorkBuddy CLI（wb-cli） ────────────────────────── */
+
+/** CodeBuddy 国内计费入口（connect-workbuddy 5.5.1 的 CN_BILLING_BASE 同值）。 */
+const WB_BILLING_BASE = 'https://www.codebuddy.cn'
+
+/** 个人版资源包 ProductCode（connect-workbuddy 5.5.1 同值）。 */
+const WB_PRODUCT_CODE = 'p_tcaca'
+
+/** 与 wb-cli 反代同源：$DSH_HOME/workbuddy-vault，缺省 ~/.dsh/workbuddy-vault。 */
+function wbVaultDir() {
+  const dshHome = (process.env.DSH_HOME ?? '').trim()
+  const base = dshHome !== '' && fs.existsSync(dshHome) ? dshHome : path.join(os.homedir(), '.dsh')
+  return path.join(base, 'workbuddy-vault')
+}
+
+/**
+ * CLI 通道「当前账号」状态文件：`$DSH_HOME/cli-active-accounts.json`。
+ *
+ * 2026-11-03 老总令「胶囊下面加 CLI 账户切换」：胶囊面板点行写入这里，
+ * `dsh-wb-cli-proxy` 每回合重读 vault 时按它把选中账号排到首位（反代侧只认
+ * 排第一的那个），因此切完下一轮立即生效，不需要重启 DSH。
+ *
+ * 形状：`{ "wb-cli": { "accountId": "...", "nickname": "...", "at": 1793... } }`
+ * 按 provider 分键，后续接 zcode-cli / qodercn-cli 时不必再改文件格式。
+ */
+function cliStateFile() {
+  return path.join(path.dirname(wbVaultDir()), 'cli-active-accounts.json')
+}
+
+/** 读状态文件；文件缺失/损坏一律当空表，绝不让面板因它报错。 */
+function readActiveAccounts() {
+  try {
+    const doc = readJson(cliStateFile())
+    return doc !== null && typeof doc === 'object' && !Array.isArray(doc) ? doc : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeActiveAccounts(doc) {
+  const file = cliStateFile()
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, `${JSON.stringify(doc, null, 2)}\n`, 'utf8')
+}
+
+/** 某个 CLI 通道当前选中的账号 id（无选择时返回空串）。 */
+export function activeCliAccountId(provider) {
+  const entry = readActiveAccounts()[provider]
+  return entry !== null && typeof entry === 'object' && typeof entry.accountId === 'string' ? entry.accountId : ''
+}
+
+/** 扫 vault 下 cn 区账号（global 区计费入口不同，未实现，不读）。 */
+function readWbVaultAccounts(warn) {
+  const out = []
+  const dir = path.join(wbVaultDir(), 'cn')
+  let names
+  try {
+    names = fs.readdirSync(dir).filter((file) => file.endsWith('.json'))
+  } catch {
+    return out
+  }
+  for (const name of names) {
+    try {
+      const doc = readJson(path.join(dir, name))
+      const token = doc?.auth?.accessToken
+      if (typeof token !== 'string' || token === '') continue
+      out.push({
+        token,
+        uid: typeof doc?.account?.uid === 'string' ? doc.account.uid : '',
+        domain: typeof doc?.auth?.domain === 'string' ? doc.auth.domain : '',
+        // 反代的自然排序口径：expiresAt 越大越靠前；面板复刻同一顺序才不会「显示一个、用的是另一个」。
+        expiresAt: typeof doc?.auth?.expiresAt === 'number' ? doc.auth.expiresAt : 0,
+        accountId: typeof doc?.accountId === 'string' && doc.accountId !== '' ? doc.accountId : name.replace(/\.json$/, ''),
+        nickname: typeof doc?.account?.nickname === 'string' && doc.account.nickname !== '' ? doc.account.nickname : '',
+      })
+    } catch (error) {
+      warn?.(`[composer-credits] wb-cli vault 账号 ${name} 读取失败：${reasonOf(error)}`)
+    }
+  }
+  return out
+}
+
+function wbDateHeader(date) {
+  const pad = (value) => value.toString().padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+function wbParseDateMs(value) {
+  if (typeof value === 'number' && value > 1e12) return value
+  if (typeof value === 'string' && value !== '') {
+    const parsed = Date.parse(value)
+    if (!Number.isNaN(parsed)) return parsed
+  }
+  return undefined
+}
+
+/**
+ * 单账号积分读数。字段映射与 connect-workbuddy 5.5.1 `fetchCredits` 逐项同源：
+ * CapacityType===4 为月度包；余量取 CycleCapacityRemain（含 Precise 字符串变体），
+ * 非月度包余量 ≤0 或已过期直接跳过（与上游一致，不算进 total）。
+ */
+async function fetchWbBalance(account) {
+  const now = new Date()
+  const headers = {
+    Authorization: `Bearer ${account.token}`,
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  }
+  if (account.uid !== '') headers['X-User-Id'] = account.uid
+  if (account.domain !== '') headers['X-Domain'] = account.domain
+  const { ok, status, body } = await requestJson(`${WB_BILLING_BASE}/v2/billing/meter/get-user-resource`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      PageNumber: 1,
+      PageSize: 100,
+      ProductCode: WB_PRODUCT_CODE,
+      Status: [0, 3],
+      PackageEndTimeRangeBegin: wbDateHeader(now),
+      PackageEndTimeRangeEnd: wbDateHeader(new Date(now.getTime() + 3185136e6)),
+    }),
+  })
+  if (!ok || body === undefined) throw new Error(`WorkBuddy 计费接口返回 HTTP ${status}`)
+  if (body?.code !== 0) throw new Error(String(body?.msg ?? `WorkBuddy 计费接口业务码 ${body?.code}`))
+  const rawAccounts = body?.data?.Response?.Data?.Accounts
+  const packages = []
+  for (const raw of Array.isArray(rawAccounts) ? rawAccounts : []) {
+    if (raw === null || typeof raw !== 'object') continue
+    const numberOf = (key) => (typeof raw[key] === 'number' && Number.isFinite(raw[key]) ? raw[key] : 0)
+    const preciseOf = (key) => {
+      const text = raw[`${key}Precise`]
+      if (typeof text === 'string' && text !== '') {
+        const parsed = Number.parseFloat(text)
+        if (Number.isFinite(parsed)) return parsed
+      }
+      if (typeof raw[key] === 'number' && Number.isFinite(raw[key])) return raw[key]
+      return numberOf(key)
+    }
+    const monthly = numberOf('CapacityType') === 4
+    const remain = raw.CycleCapacityRemain !== undefined || raw.CycleCapacityRemainPrecise !== undefined
+      ? preciseOf('CycleCapacityRemain')
+      : preciseOf('CapacityRemain')
+    const capped = remain > 0 ? remain : 0
+    const cycleEndMs = wbParseDateMs(raw.CycleEndTime)
+    const expiresAtMs = monthly ? undefined : (wbParseDateMs(raw.ExpiredTime) ?? cycleEndMs)
+    if (!monthly && (capped <= 0 || (expiresAtMs !== undefined && expiresAtMs <= Date.now()))) continue
+    packages.push(packageOf({
+      name: typeof raw.PackageName === 'string' && raw.PackageName !== '' ? raw.PackageName : 'WorkBuddy 积分包',
+      unit: 'credit',
+      remaining: capped,
+      total: preciseOf('CycleCapacitySize') || preciseOf('CapacitySize'),
+      expiredTime: expiresAtMs !== undefined ? new Date(expiresAtMs).toISOString() : '',
+    }))
+  }
+  return toBalance(packages)
+}
+
+/** vault 里每个账号一行；读数失败带 error，绝不伪造 0。第一行 = 反代实际会用的那个。 */
+async function collectWbCli(warn) {
+  const accounts = readWbVaultAccounts(warn)
+  if (accounts.length === 0) {
+    return [
+      {
+        accountId: 'wb-cli:disk',
+        nickname: 'WorkBuddy 本地 vault',
+        balance: null,
+        error: 'vault 里没有可用账号（请先在 WorkBuddy 客户端登录）',
+      },
+    ]
+  }
+  const activeId = activeCliAccountId('wb-cli')
+  // 顺序与反代逐条对齐：选中的账号第一；没选过就按 expiresAt 降序（反代的原始口径）。
+  // 这样面板第一行永远是「下一回合真正会被使用的账号」，不会显示一个、实际用另一个。
+  const ordered = [...accounts].sort((left, right) => {
+    const prefer = Number(right.accountId === activeId) - Number(left.accountId === activeId)
+    if (prefer !== 0) return prefer
+    return (right.expiresAt ?? 0) - (left.expiresAt ?? 0)
+  })
+  const effectiveId = ordered[0]?.accountId ?? ''
+  const rows = await Promise.all(ordered.map(async (account) => {
+    const row = {
+      accountId: `wb-cli:${account.accountId}`,
+      nickname: account.nickname !== '' ? account.nickname : `cn 账号 ${account.accountId.slice(0, 8)}`,
+      active: account.accountId === effectiveId,
+    }
+    try {
+      row.balance = await fetchWbBalance(account)
+    } catch (error) {
+      warn?.(`[composer-credits] wb-cli 额度读取失败（${row.nickname}）：${reasonOf(error)}`)
+      row.error = reasonOf(error)
+    }
+    return row
+  }))
+  return rows
+}
+
 /* ────────────────────────── RPC ────────────────────────── */
 
 export const CLI_CHANNEL_IDS = ['wb-cli', 'zcode-cli', 'qodercn-cli']
@@ -276,15 +476,49 @@ function installedCliProviders(llm) {
 }
 
 /**
- * `cli.balances` / `cli.channels` 的分派。
+ * 切换某个 CLI 通道的当前账号：写状态文件，`dsh-wb-cli-proxy` 下一回合读 vault 时
+ * 会把该账号排到首位（反代只用排第一的凭据，401 才继续往下换）。
+ *
+ * 只做「排序声明」，不动 vault 里的任何凭据文件 —— 账号凭证仍由客户端/插件维护，
+ * 这里的操作随时可以删掉状态文件回滚。
+ *
+ * @param {string} provider - 目前只支持 `wb-cli`（另两条 CLI 通道暂时只有一个本机账号）。
+ * @param {string} accountId - 面板行 id（`wb-cli:<vault文件名去后缀>`）或裸 accountId。
+ */
+export async function switchCliAccount(provider, accountId, warn) {
+  if (provider !== 'wb-cli') {
+    return { ok: false, error: { code: 'bad-request', message: `该通道不支持切换账号：${String(provider)}` } }
+  }
+  const raw = String(accountId ?? '').startsWith('wb-cli:') ? String(accountId).slice('wb-cli:'.length) : String(accountId ?? '')
+  const target = readWbVaultAccounts(warn).find((account) => account.accountId === raw)
+  if (target === undefined) {
+    return { ok: false, error: { code: 'bad-request', message: `vault 里没有账号：${raw}` } }
+  }
+  const doc = readActiveAccounts()
+  doc['wb-cli'] = { accountId: target.accountId, nickname: target.nickname, at: Date.now() }
+  try {
+    writeActiveAccounts(doc)
+  } catch (error) {
+    return { ok: false, error: { code: 'cli-credits/write-failed', message: `写状态文件失败：${reasonOf(error)}` } }
+  }
+  warn?.(`[composer-credits] wb-cli 当前账号 → ${target.nickname !== '' ? target.nickname : target.accountId}`)
+  return { ok: true, value: { provider: 'wb-cli', accountId: target.accountId, nickname: target.nickname } }
+}
+
+/**
+ * `cli.balances` / `cli.channels` / `cli.switchAccount` 的分派。
  * @param {string} method
- * @param {object} payload - `{provider}`。
+ * @param {object} payload - `{provider}` 或 `{provider, accountId}`。
  * @param {(message: string) => void} [warn]
  * @param {object} [llm] - 宿主 `llm` 服务，`cli.channels` 用它判断哪些反代已安装。
  */
 export async function handleCliCredits(method, payload, warn, llm) {
   if (method === 'cli.channels') {
     return { ok: true, value: { providers: installedCliProviders(llm) } }
+  }
+  if (method === 'cli.switchAccount') {
+    const body = payload !== null && typeof payload === 'object' ? payload : {}
+    return switchCliAccount(body.provider, body.accountId, warn)
   }
   if (method !== 'cli.balances') {
     return { ok: false, error: { code: 'gateway/bad-request', message: `unsupported method: ${String(method)}` } }
@@ -294,6 +528,9 @@ export async function handleCliCredits(method, payload, warn, llm) {
   switch (provider) {
     case 'zcode-cli':
       accounts = await collectZcode(warn)
+      break
+    case 'wb-cli':
+      accounts = await collectWbCli(warn)
       break
     case 'qodercn-cli':
       accounts = collectQoderCn()
